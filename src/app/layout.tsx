@@ -128,16 +128,15 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} antialiased bg-slate-950 text-slate-50`}>
-        <div className="flex flex-col h-full">
-          <div
+        <div className="flex flex-col h-[100dvh] overflow-hidden">
+          <main
             className="flex-1 overflow-y-auto"
             style={{
               paddingTop: "env(safe-area-inset-top)",
-              paddingBottom: "calc(5rem + env(safe-area-inset-bottom))"
             }}
           >
             {children}
-          </div>
+          </main>
           <BottomNav />
         </div>
       </body>
