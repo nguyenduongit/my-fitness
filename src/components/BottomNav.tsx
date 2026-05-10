@@ -15,10 +15,12 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 overflow-visible border-t border-white/10 bg-slate-950/80 backdrop-blur-xl after:absolute after:inset-x-0 after:top-full after:h-[env(safe-area-inset-bottom)] after:bg-slate-950/80 after:content-['']">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-slate-950/80 backdrop-blur-xl"
+      style={{ height: "calc(4.5rem + env(safe-area-inset-bottom))" }}
+    >
       <div
-        className="flex items-center justify-around px-2 pt-2"
-        style={{ paddingBottom: 0 }}
+        className="flex h-[4.5rem] items-center justify-around px-2"
       >
         {navItems.map((item) => {
           const isActive = pathname === item.href;
