@@ -9,7 +9,7 @@
  * 3. Notification click handling
  */
 
-const CACHE_NAME = "my-fitness-v1";
+const CACHE_NAME = "my-fitness-v2";
 
 // Assets to pre-cache on install
 const PRECACHE_ASSETS = ["/", "/icons/icon-192x192.png", "/icons/icon-512x512.png"];

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import BottomNav from "@/components/BottomNav";
 
 /**
  * Root Layout
@@ -128,7 +129,14 @@ export default function RootLayout({
           media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
         />
       </head>
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} antialiased bg-slate-950 text-slate-50`}>
+        <div className="flex flex-col min-h-dvh">
+          <div className="flex-1 pb-16">
+            {children}
+          </div>
+          <BottomNav />
+        </div>
+      </body>
     </html>
   );
 }
