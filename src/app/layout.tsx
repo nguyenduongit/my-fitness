@@ -130,13 +130,13 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} antialiased bg-slate-950 text-slate-50`}>
-        <div 
-          className="flex flex-col h-full"
-          style={{ paddingTop: "env(safe-area-inset-top)" }}
-        >
+        <div className="flex flex-col h-full">
           <div 
             className="flex-1 overflow-y-auto"
-            style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+            style={{ 
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" 
+            }}
           >
             {children}
           </div>
