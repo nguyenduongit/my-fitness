@@ -15,9 +15,9 @@ export default function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-t border-white/10">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 overflow-visible border-t border-white/10 bg-slate-950/80 backdrop-blur-xl after:absolute after:inset-x-0 after:top-full after:h-[env(safe-area-inset-bottom)] after:bg-slate-950/80 after:content-['']">
       <div
-        className="flex translate-y-4 items-center justify-around px-2 pt-2"
+        className="flex items-center justify-around px-2 pt-2"
         style={{ paddingBottom: 0 }}
       >
         {navItems.map((item) => {
