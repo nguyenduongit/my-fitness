@@ -18,7 +18,7 @@ export default function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-t border-white/10">
       <div
         className="flex items-center justify-around px-2 pt-2"
-        style={{ paddingBottom: "max(0.25rem, calc(env(safe-area-inset-bottom) - 1.5rem))" }}
+        style={{ paddingBottom: 0 }}
       >
         {navItems.map((item) => {
           const isActive = pathname === item.href;
