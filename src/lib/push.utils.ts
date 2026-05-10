@@ -137,7 +137,7 @@ export async function sendTestNotification(
         action: "send",
         subscription: subscription.toJSON(),
         payload: {
-          title: "🎉 TemplateApp",
+          title: "🎉 My Fitness",
           body: "Push notifications are working! You're all set.",
           icon: "/icons/icon-192x192.png",
           url: "/",

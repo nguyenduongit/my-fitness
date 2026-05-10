@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 /**
- * Service Worker for TemplateApp PWA
+ * Service Worker for My Fitness PWA
  *
  * Handles:
  * 1. Caching of static assets for offline support
@@ -9,7 +9,7 @@
  * 3. Notification click handling
  */
 
-const CACHE_NAME = "template-app-v1";
+const CACHE_NAME = "my-fitness-v1";
 
 // Assets to pre-cache on install
 const PRECACHE_ASSETS = ["/", "/icons/icon-192x192.png", "/icons/icon-512x512.png"];
@@ -68,7 +68,7 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   /** @type {{ title: string; body: string; icon?: string; badge?: string; url?: string }} */
   let data = {
-    title: "TemplateApp",
+    title: "My Fitness",
     body: "You have a new notification!",
     icon: "/icons/icon-192x192.png",
     badge: "/icons/icon-192x192.png",
