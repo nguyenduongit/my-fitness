@@ -128,11 +128,12 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} antialiased bg-slate-950 text-slate-50`}>
-        <div className="flex flex-col h-[100dvh] overflow-hidden">
+        <div className="flex flex-col min-h-screen">
           <main
             className="flex-1 overflow-y-auto"
             style={{
               paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "calc(3.5rem + env(safe-area-inset-bottom))"
             }}
           >
             {children}
