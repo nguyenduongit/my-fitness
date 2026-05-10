@@ -16,21 +16,18 @@ export default function AuthCallbackPage() {
     const urlHash = window.location.hash;
     setDebugInfo(`Search: ${urlSearch}\nHash: ${urlHash}`);
     
-    const params = new URLSearchParams(urlSearch || urlHash.replace('#', '?'));
-    
     // 1. Check for errors from OAuth provider
-    if (params.get("error")) {
-      setErrorMsg(`${params.get("error")}: ${params.get("error_description")}`);
+    const searchParams = new URLSearchParams(urlSearch);
+    if (searchParams.get("error")) {
+      setErrorMsg(`${searchParams.get("error")}: ${searchParams.get("error_description")}`);
       return;
     }
 
-    // 2. Explicitly handle PKCE code exchange if present
-    const code = params.get("code");
+    // 2. Explicitly handle PKCE code exchange if present (?code=...)
+    const code = searchParams.get("code");
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
         if (error) {
-          // If the error is about a code already being exchanged, ignore it.
-          // Because the supabase client might have auto-exchanged it in the background.
           if (error.message.includes("code already exchanged")) {
              router.push("/settings");
           } else {
@@ -40,12 +37,35 @@ export default function AuthCallbackPage() {
           router.push("/settings");
         }
       }).catch(err => {
-        setErrorMsg("Ngoại lệ: " + err.message);
+        setErrorMsg("Ngoại lệ code: " + err.message);
       });
-      return; // Wait for exchange to finish
+      return;
     }
 
-    // 3. If no code, listen for implicit flow or pre-existing session
+    // 3. Explicitly handle Implicit Grant flow (#access_token=...)
+    if (urlHash && urlHash.includes("access_token=")) {
+      const hashParams = new URLSearchParams(urlHash.substring(1));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        }).then(({ error }) => {
+          if (error) {
+            setErrorMsg("Lỗi lưu phiên bản (setSession): " + error.message);
+          } else {
+            router.push("/settings");
+          }
+        }).catch(err => {
+          setErrorMsg("Ngoại lệ setSession: " + err.message);
+        });
+        return;
+      }
+    }
+
+    // 4. Fallback: listen for auth state changes or existing session
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") {
         router.push("/settings");
@@ -58,7 +78,6 @@ export default function AuthCallbackPage() {
       } else if (session) {
         router.push("/settings");
       }
-      // If no session and no code, we just wait. The debug info will be visible.
     }).catch(err => {
       setErrorMsg(err.message);
     });
@@ -88,7 +107,7 @@ export default function AuthCallbackPage() {
           <p className="text-white/90 font-medium mb-6">Đang hoàn tất đăng nhập...</p>
           
           <div className="text-[10px] font-mono opacity-30 whitespace-pre-wrap break-all max-w-xs text-center bg-black/20 p-2 rounded-lg">
-            {debugInfo || "Đang phân tích URL..."}
+            {debugInfo || "Đang xử lý dữ liệu..."}
           </div>
           
           <button 
