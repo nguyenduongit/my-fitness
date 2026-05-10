@@ -48,12 +48,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#4F46E5",
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover",
+  maximumScale: 1, // Ngăn chặn zoom khi tap vào input (tuỳ chọn)
+  viewportFit: 'cover', // <-- Thuộc tính bắt buộc để tràn viền iPhone
 };
 
 export default function RootLayout({
@@ -131,11 +129,11 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} antialiased bg-slate-950 text-slate-50`}>
         <div className="flex flex-col h-full">
-          <div 
+          <div
             className="flex-1 overflow-y-auto"
-            style={{ 
+            style={{
               paddingTop: "env(safe-area-inset-top)",
-              paddingBottom: "calc(5rem + env(safe-area-inset-bottom))" 
+              paddingBottom: "calc(5rem + env(safe-area-inset-bottom))"
             }}
           >
             {children}
