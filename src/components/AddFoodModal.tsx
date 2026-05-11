@@ -102,7 +102,7 @@ export default function AddFoodModal({
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-3 shrink-0">
-                    <h2 className="text-lg font-semibold text-white">Thêm món ăn</h2>
+                    <h2 className="text-lg font-semibold text-white">Thêm thực phẩm</h2>
                     <button
                         onClick={onClose}
                         className="p-2 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors"
@@ -161,7 +161,7 @@ export default function AddFoodModal({
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
                                 <input
                                     type="text"
-                                    placeholder="Tìm món ăn..."
+                                    placeholder="Tìm thực phẩm..."
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     className="w-full pl-9 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 text-sm focus:outline-none focus:border-indigo-500/50"
@@ -195,7 +195,7 @@ export default function AddFoodModal({
                         /* Custom form */
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs text-white/50 mb-1.5 block">Tên món ăn *</label>
+                                <label className="text-xs text-white/50 mb-1.5 block">Tên thực phẩm *</label>
                                 <input
                                     type="text"
                                     placeholder="VD: Cơm gà"
@@ -260,7 +260,7 @@ export default function AddFoodModal({
                                 disabled={!form.name || !form.calories || loading}
                                 className="w-full py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold transition-colors mt-2"
                             >
-                                {loading ? "Đang thêm..." : "Thêm món ăn"}
+                                {loading ? "Đang thêm..." : "Thêm thực phẩm"}
                             </button>
                         </div>
                     )}
