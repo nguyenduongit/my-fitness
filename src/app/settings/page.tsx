@@ -13,8 +13,11 @@ import {
     Target,
 } from "lucide-react";
 import NotificationPermission from "@/components/NotificationPermission";
+import type { PushPermissionState } from "@/components/NotificationPermission";
+import SettingsBlock from "@/components/SettingsBlock";
 import ScheduleSettingsModal from "@/components/ScheduleSettingsModal";
 import { supabase } from "@/lib/supabase";
+import { isPushSupported } from "@/lib/push.utils";
 import {
     getNotificationSettings,
     saveNotificationSettings,
@@ -112,6 +115,23 @@ function normalizeNutritionGoal(goal: NutritionGoalUpsert): NutritionGoalUpsert 
     };
 }
 
+function formatMetric(value: number | null | undefined, unit: string): string {
+    if (value == null) return "--";
+    return `${value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+function formatGoal(value: number, unit: string): string {
+    return `${value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+const NOTIFICATION_PERMISSION_LABELS: Record<PushPermissionState, string> = {
+    loading: "Đang kiểm tra",
+    unsupported: "Không hỗ trợ",
+    default: "Chưa bật",
+    granted: "Đã bật",
+    denied: "Bị chặn",
+};
+
 export default function SettingsPage() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
@@ -129,6 +149,8 @@ export default function SettingsPage() {
     const [saveMessage, setSaveMessage] = useState("");
     const [hasChanges, setHasChanges] = useState(false);
     const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [notificationPermission, setNotificationPermission] =
+        useState<PushPermissionState>("loading");
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -141,6 +163,16 @@ export default function SettingsPage() {
             setUser(session?.user ?? null);
         });
         return () => subscription.unsubscribe();
+    }, []);
+
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            setNotificationPermission(
+                isPushSupported() ? Notification.permission : "unsupported"
+            );
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
     }, []);
 
     // Load user settings
@@ -261,6 +293,59 @@ export default function SettingsPage() {
         await supabase.auth.signOut();
     };
 
+    const profileSummary = [
+        { icon: "🎂", label: "Tuổi", value: formatMetric(profile.age, "tuổi") },
+        {
+            icon: "⚧",
+            label: "Giới tính",
+            value: profile.gender ? GENDER_LABELS[profile.gender] : "--",
+        },
+        { icon: "📐", label: "Chiều cao", value: formatMetric(profile.height_cm, "cm") },
+        { icon: "⚖️", label: "Cân nặng", value: formatMetric(profile.weight_kg, "kg") },
+        ...BODY_MEASUREMENT_KEYS.map((field) => ({
+            icon: BODY_MEASUREMENT_ICONS[field],
+            label: BODY_MEASUREMENT_LABELS[field],
+            value: formatMetric(profile[field], "cm"),
+        })),
+    ];
+
+    const nutritionSummary = NUTRITION_FIELDS.map((field) => ({
+        icon: NUTRITION_ICONS[field],
+        label: NUTRITION_LABELS[field],
+        value: formatGoal(nutritionGoal[field], NUTRITION_UNITS[field]),
+    }));
+
+    const reminderSummary = [
+        {
+            icon: <Bell className="w-3.5 h-3.5" />,
+            label: "Nhắc nhở",
+            value: settings.notifications_enabled ? "Bật" : "Tắt",
+        },
+        ...TIME_FIELDS.map((field) => ({
+            icon: TIME_FIELD_ICONS[field],
+            label: TIME_FIELD_LABELS[field],
+            value: settings[field],
+        })),
+        {
+            icon: <Timer className="w-3.5 h-3.5" />,
+            label: "Nhắc lại sau",
+            value: `${settings.reminder_delay_minutes} phút`,
+        },
+    ];
+
+    const accountSummary = [
+        {
+            icon: <UserRound className="w-3.5 h-3.5" />,
+            label: "Trạng thái",
+            value: loading ? "Đang tải" : user ? "Đã đăng nhập" : "Chưa đăng nhập",
+        },
+        {
+            icon: "✉️",
+            label: "Email",
+            value: user?.email ?? "--",
+        },
+    ];
+
     return (
         <main
             className="p-5 min-h-full"
@@ -270,165 +355,156 @@ export default function SettingsPage() {
                 Cài đặt
             </h1>
 
-            <div className="space-y-4">
-                {/* ── Profile Settings ─────────────────────────────────────────────── */}
+            <div className="space-y-3">
                 {user && (
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                        <div className="flex items-center gap-2 mb-4">
-                            <UserRound className="w-4 h-4 text-cyan-400" />
-                            <h3 className="font-semibold text-base text-white/90">Thông tin profile</h3>
+                    <SettingsBlock
+                        title="Thông tin profile"
+                        icon={<UserRound className="w-4 h-4 text-cyan-400" />}
+                        summary={profileSummary}
+                        loading={settingsLoading}
+                    >
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-base">⚧</span>
+                                <span className="text-xs text-white/45 font-medium">Giới tính</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                                {(["male", "female", "other"] as Gender[]).map((gender) => (
+                                    <button
+                                        key={gender}
+                                        type="button"
+                                        onClick={() => handleGenderChange(gender)}
+                                        className={`min-w-0 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors ${
+                                            profile.gender === gender
+                                                ? "bg-cyan-500/25 text-cyan-200 border border-cyan-500/35"
+                                                : "bg-white/5 text-white/45 border border-white/5 active:bg-white/10"
+                                        }`}
+                                    >
+                                        {GENDER_LABELS[gender]}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
-                        {settingsLoading ? (
-                            <div className="flex justify-center py-6">
-                                <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-base">⚧</span>
-                                        <span className="text-xs text-white/45 font-medium">Giới tính</span>
+                        <div className="grid grid-cols-2 gap-2.5">
+                            {PROFILE_BASIC_FIELDS.map((field) => (
+                                <label
+                                    key={field.key}
+                                    className={
+                                        field.key === "age"
+                                            ? "block p-3 rounded-xl bg-white/5 border border-white/5 col-span-2"
+                                            : "block p-3 rounded-xl bg-white/5 border border-white/5"
+                                    }
+                                >
+                                    <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
+                                        <span className="text-base">{field.icon}</span>
+                                        {field.label}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min={field.min}
+                                            max={field.max}
+                                            step={field.step}
+                                            value={profile[field.key] ?? ""}
+                                            onChange={(e) =>
+                                                handleProfileNumberChange(field.key, e.target.value)
+                                            }
+                                            placeholder="--"
+                                            className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none placeholder:text-white/20"
+                                        />
+                                        <span className="shrink-0 text-xs text-white/35">{field.unit}</span>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {(["male", "female", "other"] as Gender[]).map((gender) => (
-                                            <button
-                                                key={gender}
-                                                type="button"
-                                                onClick={() => handleGenderChange(gender)}
-                                                className={`min-w-0 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors ${
-                                                    profile.gender === gender
-                                                        ? "bg-cyan-500/25 text-cyan-200 border border-cyan-500/35"
-                                                        : "bg-white/5 text-white/45 border border-white/5 active:bg-white/10"
-                                                }`}
-                                            >
-                                                {GENDER_LABELS[gender]}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2.5">
-                                    {PROFILE_BASIC_FIELDS.map((field) => (
-                                        <label
-                                            key={field.key}
-                                            className={field.key === "age" ? "block p-3 rounded-xl bg-white/5 border border-white/5 col-span-2" : "block p-3 rounded-xl bg-white/5 border border-white/5"}
-                                        >
-                                            <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
-                                                <span className="text-base">{field.icon}</span>
-                                                {field.label}
-                                            </span>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    type="number"
-                                                    min={field.min}
-                                                    max={field.max}
-                                                    step={field.step}
-                                                    value={profile[field.key] ?? ""}
-                                                    onChange={(e) =>
-                                                        handleProfileNumberChange(field.key, e.target.value)
-                                                    }
-                                                    placeholder="--"
-                                                    className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none placeholder:text-white/20"
-                                                />
-                                                <span className="shrink-0 text-xs text-white/35">{field.unit}</span>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Ruler className="w-3.5 h-3.5 text-white/35" />
-                                        <p className="text-xs font-medium text-white/45">Số đo cơ thể</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2.5">
-                                        {BODY_MEASUREMENT_KEYS.map((field) => (
-                                            <label
-                                                key={field}
-                                                className="block p-3 rounded-xl bg-white/5 border border-white/5"
-                                            >
-                                                <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
-                                                    <span className="text-base">{BODY_MEASUREMENT_ICONS[field]}</span>
-                                                    {BODY_MEASUREMENT_LABELS[field]}
-                                                </span>
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="number"
-                                                        min={1}
-                                                        step={0.1}
-                                                        value={profile[field] ?? ""}
-                                                        onChange={(e) =>
-                                                            handleProfileNumberChange(field, e.target.value)
-                                                        }
-                                                        placeholder="--"
-                                                        className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none placeholder:text-white/20"
-                                                    />
-                                                    <span className="shrink-0 text-xs text-white/35">cm</span>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* ── Nutrition Goal Settings ─────────────────────────────────────── */}
-                {user && (
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Target className="w-4 h-4 text-orange-400" />
-                            <h3 className="font-semibold text-base text-white/90">
-                                Mục tiêu dinh dưỡng ngày
-                            </h3>
+                                </label>
+                            ))}
                         </div>
 
-                        {settingsLoading ? (
-                            <div className="flex justify-center py-6">
-                                <div className="w-5 h-5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <Ruler className="w-3.5 h-3.5 text-white/35" />
+                                <p className="text-xs font-medium text-white/45">Số đo cơ thể</p>
                             </div>
-                        ) : (
                             <div className="grid grid-cols-2 gap-2.5">
-                                {NUTRITION_FIELDS.map((field) => (
+                                {BODY_MEASUREMENT_KEYS.map((field) => (
                                     <label
                                         key={field}
                                         className="block p-3 rounded-xl bg-white/5 border border-white/5"
                                     >
                                         <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
-                                            <span className="text-base">{NUTRITION_ICONS[field]}</span>
-                                            {NUTRITION_LABELS[field]}
+                                            <span className="text-base">{BODY_MEASUREMENT_ICONS[field]}</span>
+                                            {BODY_MEASUREMENT_LABELS[field]}
                                         </span>
                                         <div className="flex items-center gap-2">
                                             <input
                                                 type="number"
                                                 min={1}
-                                                step={NUTRITION_STEPS[field]}
-                                                value={nutritionGoal[field]}
+                                                step={0.1}
+                                                value={profile[field] ?? ""}
                                                 onChange={(e) =>
-                                                    handleNutritionChange(field, e.target.value)
+                                                    handleProfileNumberChange(field, e.target.value)
                                                 }
-                                                className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none"
+                                                placeholder="--"
+                                                className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none placeholder:text-white/20"
                                             />
-                                            <span className="shrink-0 text-xs text-white/35">
-                                                {NUTRITION_UNITS[field]}
-                                            </span>
+                                            <span className="shrink-0 text-xs text-white/35">cm</span>
                                         </div>
                                     </label>
                                 ))}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    </SettingsBlock>
                 )}
 
-                {/* ── Schedule Settings ──────────────────────────────────────────────── */}
                 {user && (
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                        <div className="flex items-center gap-2 mb-4">
-                            <CalendarDays className="w-4 h-4 text-emerald-400" />
-                            <h3 className="font-semibold text-base text-white/90">Lịch tập luyện</h3>
+                    <SettingsBlock
+                        title="Mục tiêu dinh dưỡng ngày"
+                        icon={<Target className="w-4 h-4 text-orange-400" />}
+                        summary={nutritionSummary}
+                        loading={settingsLoading}
+                    >
+                        <div className="grid grid-cols-2 gap-2.5">
+                            {NUTRITION_FIELDS.map((field) => (
+                                <label
+                                    key={field}
+                                    className="block p-3 rounded-xl bg-white/5 border border-white/5"
+                                >
+                                    <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
+                                        <span className="text-base">{NUTRITION_ICONS[field]}</span>
+                                        {NUTRITION_LABELS[field]}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            step={NUTRITION_STEPS[field]}
+                                            value={nutritionGoal[field]}
+                                            onChange={(e) =>
+                                                handleNutritionChange(field, e.target.value)
+                                            }
+                                            className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none"
+                                        />
+                                        <span className="shrink-0 text-xs text-white/35">
+                                            {NUTRITION_UNITS[field]}
+                                        </span>
+                                    </div>
+                                </label>
+                            ))}
                         </div>
+                    </SettingsBlock>
+                )}
+
+                {user && (
+                    <SettingsBlock
+                        title="Lịch tập luyện"
+                        icon={<CalendarDays className="w-4 h-4 text-emerald-400" />}
+                        summary={[
+                            {
+                                icon: <CalendarDays className="w-3.5 h-3.5" />,
+                                label: "Tuỳ chỉnh",
+                                value: "Ngày tập / nghỉ",
+                            },
+                        ]}
+                    >
                         <button
                             onClick={() => setShowScheduleModal(true)}
                             className="w-full flex items-center justify-between p-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-colors"
@@ -436,119 +512,102 @@ export default function SettingsPage() {
                             <span className="text-sm text-white/80 font-medium">Tuỳ chỉnh ngày tập / ngày nghỉ</span>
                             <ChevronRight className="w-4 h-4 text-white/40" />
                         </button>
-                    </div>
+                    </SettingsBlock>
                 )}
 
-                {/* ── Notification Permission ───────────────────────────────────────── */}
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Bell className="w-4 h-4 text-indigo-400" />
-                        <h3 className="font-semibold text-base text-white/90">Thông báo</h3>
-                    </div>
-                    <NotificationPermission />
-                </div>
+                <SettingsBlock
+                    title="Thông báo"
+                    icon={<Bell className="w-4 h-4 text-indigo-400" />}
+                    summary={[
+                        {
+                            icon: <Bell className="w-3.5 h-3.5" />,
+                            label: "Quyền thông báo",
+                            value: NOTIFICATION_PERMISSION_LABELS[notificationPermission],
+                        },
+                    ]}
+                >
+                    <NotificationPermission onPermissionChange={setNotificationPermission} />
+                </SettingsBlock>
 
-                {/* ── Time Settings ─────────────────────────────────────────────────── */}
                 {user && (
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                        <div className="flex items-center gap-2 mb-4">
-                            <Clock className="w-4 h-4 text-amber-400" />
-                            <h3 className="font-semibold text-base text-white/90">Lịch nhắc nhở</h3>
+                    <SettingsBlock
+                        title="Lịch nhắc nhở"
+                        icon={<Clock className="w-4 h-4 text-amber-400" />}
+                        summary={reminderSummary}
+                        loading={settingsLoading}
+                    >
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5">
+                            <div className="flex items-center gap-2">
+                                <Bell className="w-3.5 h-3.5 text-white/50" />
+                                <span className="text-sm text-white/70">Bật nhắc nhở</span>
+                            </div>
+                            <button
+                                onClick={handleToggleEnabled}
+                                className={`relative w-12 h-7 rounded-full transition-colors ${
+                                    settings.notifications_enabled
+                                        ? "bg-indigo-500"
+                                        : "bg-white/10"
+                                }`}
+                            >
+                                <div
+                                    className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                        settings.notifications_enabled
+                                            ? "translate-x-6"
+                                            : "translate-x-1"
+                                    }`}
+                                />
+                            </button>
                         </div>
 
-                        {settingsLoading ? (
-                            <div className="flex justify-center py-6">
-                                <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
-                            </div>
-                        ) : (
-                            <>
-                                {/* Enabled toggle */}
-                                <div className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <Bell className="w-3.5 h-3.5 text-white/50" />
-                                        <span className="text-sm text-white/70">Bật nhắc nhở</span>
-                                    </div>
-                                    <button
-                                        onClick={handleToggleEnabled}
-                                        className={`relative w-12 h-7 rounded-full transition-colors ${
-                                            settings.notifications_enabled
-                                                ? "bg-indigo-500"
-                                                : "bg-white/10"
-                                        }`}
-                                    >
-                                        <div
-                                            className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
-                                                settings.notifications_enabled
-                                                    ? "translate-x-6"
-                                                    : "translate-x-1"
-                                            }`}
-                                        />
-                                    </button>
-                                </div>
-
-                                {/* Time fields */}
-                                <div className="space-y-2.5">
-                                    {TIME_FIELDS.map((field) => (
-                                        <div
-                                            key={field}
-                                            className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5"
-                                        >
-                                            <div className="flex items-center gap-2.5">
-                                                <span className="text-lg">{TIME_FIELD_ICONS[field]}</span>
-                                                <span className="text-sm text-white/70">
-                                                    {TIME_FIELD_LABELS[field]}
-                                                </span>
-                                            </div>
-                                            <input
-                                                type="time"
-                                                value={settings[field]}
-                                                onChange={(e) => handleTimeChange(field, e.target.value)}
-                                                className="bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white font-medium focus:outline-none focus:border-indigo-500/50 [color-scheme:dark]"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Reminder delay */}
-                                <div className="mt-4 p-3 rounded-xl bg-white/5 border border-white/5">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <Timer className="w-3.5 h-3.5 text-white/50" />
-                                            <span className="text-sm text-white/70">Nhắc lại sau</span>
-                                        </div>
-                                        <span className="text-sm font-medium text-indigo-400">
-                                            {settings.reminder_delay_minutes} phút
+                        <div className="space-y-2.5">
+                            {TIME_FIELDS.map((field) => (
+                                <div
+                                    key={field}
+                                    className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5"
+                                >
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-lg">{TIME_FIELD_ICONS[field]}</span>
+                                        <span className="text-sm text-white/70">
+                                            {TIME_FIELD_LABELS[field]}
                                         </span>
                                     </div>
                                     <input
-                                        type="range"
-                                        min={15}
-                                        max={120}
-                                        step={5}
-                                        value={settings.reminder_delay_minutes}
-                                        onChange={(e) => handleDelayChange(Number(e.target.value))}
-                                        className="w-full accent-indigo-500 h-1"
+                                        type="time"
+                                        value={settings[field]}
+                                        onChange={(e) => handleTimeChange(field, e.target.value)}
+                                        className="bg-white/10 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white font-medium focus:outline-none focus:border-indigo-500/50 [color-scheme:dark]"
                                     />
-                                    <div className="flex justify-between mt-1">
-                                        <span className="text-[10px] text-white/25">15 phút</span>
-                                        <span className="text-[10px] text-white/25">120 phút</span>
-                                    </div>
                                 </div>
-
-                            </>
-                        )}
-
-                        {/* Explanation */}
-                        <div className="mt-4 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
-                            <p className="text-[11px] text-white/40 leading-relaxed">
-                                💡 Hệ thống sẽ nhắc bạn khi đến giờ ăn/tập, và nhắc lại sau
-                                thời gian đã cài đặt để hỏi bạn đã hoàn thành chưa.
-                            </p>
+                            ))}
                         </div>
-                    </div>
+
+                        <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                    <Timer className="w-3.5 h-3.5 text-white/50" />
+                                    <span className="text-sm text-white/70">Nhắc lại sau</span>
+                                </div>
+                                <span className="text-sm font-medium text-indigo-400">
+                                    {settings.reminder_delay_minutes} phút
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min={15}
+                                max={120}
+                                step={5}
+                                value={settings.reminder_delay_minutes}
+                                onChange={(e) => handleDelayChange(Number(e.target.value))}
+                                className="w-full accent-indigo-500 h-1"
+                            />
+                            <div className="flex justify-between mt-1">
+                                <span className="text-[10px] text-white/25">15 phút</span>
+                                <span className="text-[10px] text-white/25">120 phút</span>
+                            </div>
+                        </div>
+                    </SettingsBlock>
                 )}
 
-                {/* ── Save All ─────────────────────────────────────────────────────── */}
                 {user && (hasChanges || saveMessage) && (
                     <div className="space-y-3">
                         {hasChanges && (
@@ -576,13 +635,13 @@ export default function SettingsPage() {
                     </div>
                 )}
 
-                {/* ── Account ───────────────────────────────────────────────────────── */}
-                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
-                    <h3 className="font-semibold text-base text-white/90 mb-4">Tài khoản</h3>
-
-                    {loading ? (
-                        <p className="text-white/50 text-sm">Đang tải...</p>
-                    ) : user ? (
+                <SettingsBlock
+                    title="Tài khoản"
+                    icon={<UserRound className="w-4 h-4 text-sky-400" />}
+                    summary={accountSummary}
+                    loading={loading}
+                >
+                    {user ? (
                         <div className="space-y-4">
                             <div className="flex items-center gap-3">
                                 {user.user_metadata?.avatar_url ? (
@@ -628,7 +687,7 @@ export default function SettingsPage() {
                             </button>
                         </div>
                     )}
-                </div>
+                </SettingsBlock>
             </div>
 
             {showScheduleModal && (

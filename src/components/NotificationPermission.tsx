@@ -1,41 +1,47 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { Bell, LoaderCircle } from "lucide-react";
 import {
   isPushSupported,
   registerServiceWorker,
   requestNotificationPermission,
   subscribeToPush,
-  sendTestNotification,
 } from "@/lib/push.utils";
 import { supabase } from "@/lib/supabase";
 
 /**
  * NotificationPermission Component
  *
- * Displays the notification permission status and provides buttons to:
- * 1. Request notification permission and subscribe to push
- * 2. Send a test notification to verify the setup
- *
- * Subscriptions are saved to Supabase for backend-driven notifications.
+ * Displays the notification permission status and provides a button to
+ * request notification permission and subscribe to push.
  */
 
-type PermissionState = "default" | "granted" | "denied" | "unsupported" | "loading";
+export type PushPermissionState = "default" | "granted" | "denied" | "unsupported" | "loading";
 
-export default function NotificationPermission() {
-  const [permissionState, setPermissionState] = useState<PermissionState>("loading");
-  const [subscription, setSubscription] = useState<PushSubscription | null>(null);
+interface NotificationPermissionProps {
+  onPermissionChange?: (state: PushPermissionState) => void;
+}
+
+export default function NotificationPermission({
+  onPermissionChange,
+}: NotificationPermissionProps) {
+  const [permissionState, setPermissionState] = useState<PushPermissionState>("loading");
   const [isSubscribing, setIsSubscribing] = useState(false);
-  const [isSending, setIsSending] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>("");
+
+  const updatePermissionState = useCallback((state: PushPermissionState) => {
+    setPermissionState(state);
+    onPermissionChange?.(state);
+  }, [onPermissionChange]);
 
   // Check current notification permission on mount
   useEffect(() => {
     if (!isPushSupported()) {
-      setPermissionState("unsupported");
+      updatePermissionState("unsupported");
       return;
     }
-    setPermissionState(Notification.permission);
+    updatePermissionState(Notification.permission);
 
     // If already granted, register service worker and get/create subscription
     if (Notification.permission === "granted") {
@@ -55,7 +61,6 @@ export default function NotificationPermission() {
           }
           const existingSub = await reg.pushManager.getSubscription();
           if (existingSub) {
-            setSubscription(existingSub);
             // Re-save to backend
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
@@ -65,14 +70,13 @@ export default function NotificationPermission() {
             // iOS Safari PWA: subscription may have been lost, re-subscribe silently
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-              const newSub = await subscribeToPush(reg, user.id);
-              if (newSub) setSubscription(newSub);
+              await subscribeToPush(reg, user.id);
             }
           }
         }
       });
     }
-  }, []);
+  }, [updatePermissionState]);
 
   // Handle "Allow Notifications" button click
   const handleSubscribe = useCallback(async () => {
@@ -82,7 +86,7 @@ export default function NotificationPermission() {
     try {
       // Step 1: Request permission
       const permission = await requestNotificationPermission();
-      setPermissionState(permission);
+      updatePermissionState(permission);
 
       if (permission !== "granted") {
         setStatusMessage("Permission denied. Please enable notifications in your browser settings.");
@@ -106,7 +110,6 @@ export default function NotificationPermission() {
       // Step 4: Subscribe to push (saves to Supabase)
       const sub = await subscribeToPush(registration, user.id);
       if (sub) {
-        setSubscription(sub);
         setStatusMessage("✅ Đã bật thông báo thành công!");
       } else {
         setStatusMessage("Không thể tạo push subscription.");
@@ -116,31 +119,7 @@ export default function NotificationPermission() {
     } finally {
       setIsSubscribing(false);
     }
-  }, []);
-
-  // Handle "Test Notification" button click
-  const handleTestNotification = useCallback(async () => {
-    if (!subscription) {
-      setStatusMessage("Vui lòng bật thông báo trước.");
-      return;
-    }
-
-    setIsSending(true);
-    setStatusMessage("");
-
-    try {
-      const success = await sendTestNotification(subscription);
-      if (success) {
-        setStatusMessage("🔔 Đã gửi thông báo thử! Kiểm tra notification center.");
-      } else {
-        setStatusMessage("Gửi thông báo thất bại.");
-      }
-    } catch (error) {
-      setStatusMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
-    } finally {
-      setIsSending(false);
-    }
-  }, [subscription]);
+  }, [updatePermissionState]);
 
   // ── Render ──
 
@@ -187,55 +166,13 @@ export default function NotificationPermission() {
             <span className="relative z-10 flex items-center justify-center gap-2">
               {isSubscribing ? (
                 <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
+                  <LoaderCircle className="w-4 h-4 animate-spin" />
                   Đang kết nối...
                 </>
               ) : (
                 <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  </svg>
+                  <Bell className="w-4 h-4" />
                   Bật thông báo
-                </>
-              )}
-            </span>
-          </button>
-        )}
-
-        {/* Test notification button */}
-        {permissionState === "granted" && (
-          <button
-            onClick={handleTestNotification}
-            disabled={isSending || !subscription}
-            className="flex-1 px-6 py-3 min-h-[44px] rounded-xl font-medium text-sm
-              bg-white/5 border border-white/10
-              hover:bg-white/10 hover:border-white/20
-              active:bg-white/15 active:border-white/25
-              disabled:opacity-50 disabled:cursor-not-allowed
-              text-white/90 backdrop-blur-sm
-              transition-all duration-300
-              hover:-translate-y-0.5
-              active:scale-[0.98]"
-            id="btn-test-notification"
-          >
-            <span className="flex items-center justify-center gap-2">
-              {isSending ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Đang gửi...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  Gửi thông báo thử
                 </>
               )}
             </span>
@@ -246,7 +183,7 @@ export default function NotificationPermission() {
       {/* Status message */}
       {statusMessage && (
         <p
-          className={`text-xs text-center px-4 py-2 rounded-lg ${statusMessage.startsWith("✅") || statusMessage.startsWith("🔔")
+          className={`text-xs text-center px-4 py-2 rounded-lg ${statusMessage.startsWith("✅")
               ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
               : "bg-red-500/10 text-red-300 border border-red-500/20"
             }`}
