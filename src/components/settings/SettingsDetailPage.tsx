@@ -6,12 +6,15 @@ import { useCallback, useEffect, useState } from "react";
 import { dispatchReminderScheduleRefresh } from "@/components/ReminderScheduler";
 import {
     ArrowLeft,
+    BellRing,
     CalendarDays,
     LogIn,
     Save,
+    SendHorizonal,
     Timer,
     UserRound,
 } from "lucide-react";
+import NotificationPermission from "@/components/NotificationPermission";
 import { getNotificationSettings, saveNotificationSettings } from "@/lib/notification-settings";
 import { getNutritionGoal, saveNutritionGoal } from "@/lib/nutrition-goals";
 import { createWorkoutSession, getWorkoutSessions, updateWorkoutSession } from "@/lib/schedule";
@@ -192,6 +195,8 @@ export default function SettingsDetailPage({ section }: SettingsDetailPageProps)
     const [saveMessage, setSaveMessage] = useState("");
     const [hasChanges, setHasChanges] = useState(false);
     const [togglingDay, setTogglingDay] = useState<DayOfWeek | null>(null);
+    const [testingPush, setTestingPush] = useState(false);
+    const [testPushMessage, setTestPushMessage] = useState("");
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -351,6 +356,38 @@ export default function SettingsDetailPage({ section }: SettingsDetailPageProps)
         }
     };
 
+    const handleTestPush = async () => {
+        setTestingPush(true);
+        setTestPushMessage("");
+        try {
+            const response = await fetch("/api/send-notification", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "send-to-user",
+                    user_id: user!.id,
+                    payload: {
+                        title: "🎉 My Fitness",
+                        body: "Push notification đang hoạt động! Bạn sẽ nhận được thông báo ngay cả khi thoát app.",
+                        icon: "/icons/icon-192x192.png",
+                        url: "/",
+                    },
+                }),
+            });
+
+            if (response.ok) {
+                setTestPushMessage("✅ Đã gửi thông báo thử nghiệm!");
+            } else {
+                setTestPushMessage("❌ Gửi thất bại. Vui lòng thử lại.");
+            }
+        } catch (err) {
+            setTestPushMessage("❌ Lỗi kết nối. Vui lòng thử lại.");
+            console.error("Test push failed:", err);
+        } finally {
+            setTestingPush(false);
+        }
+    };
+
     const handleLogin = async () => {
         await supabase.auth.signInWithOAuth({
             provider: "google",
@@ -475,6 +512,42 @@ export default function SettingsDetailPage({ section }: SettingsDetailPageProps)
 
     const renderReminderSection = () => (
         <div className="space-y-3">
+            {/* ── Trạng thái thông báo ── */}
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-4 backdrop-blur-md">
+                <div className="flex items-center gap-2 mb-3">
+                    <BellRing className="w-4 h-4 text-amber-400" />
+                    <p className="text-sm font-semibold text-white/85">Trạng thái thông báo đẩy</p>
+                </div>
+                <NotificationPermission />
+            </div>
+
+            {/* ── Nút test push ── */}
+            <button
+                onClick={handleTestPush}
+                disabled={testingPush}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-indigo-500/20 to-cyan-500/20 border border-indigo-500/30 text-indigo-300 font-medium text-sm active:from-indigo-500/30 active:to-cyan-500/30 transition-colors disabled:opacity-50"
+            >
+                <SendHorizonal className="w-4 h-4" />
+                {testingPush ? "Đang gửi thử nghiệm..." : "Gửi thông báo thử nghiệm"}
+            </button>
+            {testPushMessage && (
+                <p className={`text-xs text-center px-4 py-2 rounded-lg ${
+                    testPushMessage.startsWith("✅")
+                        ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                        : "bg-red-500/10 text-red-300 border border-red-500/20"
+                }`}>
+                    {testPushMessage}
+                </p>
+            )}
+
+            {/* ── Cài đặt giờ nhắc nhở ── */}
+            <div className="pt-2">
+                <div className="mb-2 flex items-center gap-2 px-1">
+                    <span className="w-5 h-5 rounded-lg bg-white/5 flex items-center justify-center text-xs">⏰</span>
+                    <p className="text-xs font-semibold text-white/45">Giờ nhắc nhở</p>
+                </div>
+            </div>
+
             {TIME_FIELDS.map((field) => (
                 <SettingsRow
                     key={field}

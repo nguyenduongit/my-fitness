@@ -3,8 +3,10 @@
  *
  * Helper functions for registering service workers,
  * requesting notification permissions, and managing push subscriptions.
- * Subscriptions are saved to Supabase via API.
+ * Subscriptions are saved to Supabase directly via the client library.
  */
+
+import { savePushSubscription } from "./push-subscriptions";
 
 /**
  * Check if the browser supports service workers and push notifications
@@ -28,6 +30,24 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
       scope: "/",
     });
     console.log("✅ Service Worker registered with scope:", registration.scope);
+
+    // Wait for the service worker to be active
+    if (registration.installing || registration.waiting) {
+      await new Promise<void>((resolve) => {
+        const sw = registration.installing || registration.waiting;
+        if (!sw) { resolve(); return; }
+        
+        if (sw.state === "activated") { resolve(); return; }
+
+        sw.addEventListener("statechange", function handler() {
+          if (sw.state === "activated") {
+            sw.removeEventListener("statechange", handler);
+            resolve();
+          }
+        });
+      });
+    }
+
     return registration;
   } catch (error) {
     console.error("❌ Service Worker registration failed:", error);
@@ -68,7 +88,7 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
 
 /**
  * Subscribe to push notifications
- * Sends the subscription to the server API endpoint and saves to Supabase
+ * Creates a push subscription and saves it directly to Supabase
  */
 export async function subscribeToPush(
   registration: ServiceWorkerRegistration,
@@ -94,16 +114,12 @@ export async function subscribeToPush(
         await existingSubscription.unsubscribe();
       } else {
         console.log("📬 Already subscribed to push notifications.");
-        // Re-save to backend in case it was lost
-        await fetch("/api/send-notification", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "subscribe",
-            subscription: existingSubscription.toJSON(),
-            user_id: userId,
-          }),
-        });
+        // Re-save to Supabase in case it was lost
+        try {
+          await savePushSubscription(existingSubscription);
+        } catch (err) {
+          console.warn("⚠️ Failed to re-save existing subscription:", err);
+        }
         return existingSubscription;
       }
     }
@@ -116,16 +132,23 @@ export async function subscribeToPush(
 
     console.log("✅ Push subscription created:", JSON.stringify(subscription));
 
-    // Send subscription to backend (saves to Supabase)
-    await fetch("/api/send-notification", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "subscribe",
-        subscription: subscription.toJSON(),
-        user_id: userId,
-      }),
-    });
+    // Save subscription directly to Supabase
+    try {
+      await savePushSubscription(subscription);
+      console.log("✅ Subscription saved to Supabase.");
+    } catch (err) {
+      console.warn("⚠️ Failed to save subscription to Supabase:", err);
+      // Also try via API as fallback
+      await fetch("/api/send-notification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "subscribe",
+          subscription: subscription.toJSON(),
+          user_id: userId,
+        }),
+      });
+    }
 
     return subscription;
   } catch (error) {
@@ -135,18 +158,25 @@ export async function subscribeToPush(
 }
 
 /**
- * Send a test notification via the API endpoint
+ * Send a test notification via the Supabase Edge Function
  */
-export async function sendTestNotification(
-  subscription: PushSubscription
-): Promise<boolean> {
+export async function sendTestNotification(): Promise<boolean> {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error("Missing Supabase configuration");
+    }
+
     const response = await fetch("/api/send-notification", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "send",
-        subscription: subscription.toJSON(),
+        subscription: (await navigator.serviceWorker.ready.then(
+          (reg) => reg.pushManager.getSubscription()
+        ))?.toJSON(),
         payload: {
           title: "🎉 My Fitness",
           body: "Push notifications are working! You're all set.",
