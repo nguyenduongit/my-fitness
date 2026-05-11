@@ -228,10 +228,22 @@ body {
   }
 
   /* Re-enable text selection for inputs and text areas */
-  input,
-  textarea,
-  [contenteditable="true"] {
+input,
+textarea,
+[contenteditable="true"] {
     -webkit-user-select: text;
     user-select: text;
   }
+}
+
+/* Numeric fields in settings use keyboard entry, without browser stepper buttons. */
+.input-number-plain {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.input-number-plain::-webkit-outer-spin-button,
+.input-number-plain::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }

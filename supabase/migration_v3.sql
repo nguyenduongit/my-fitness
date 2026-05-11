@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 
     -- Thông tin cơ bản
     age INTEGER CHECK (age > 0 AND age < 200),
-    gender TEXT CHECK (gender IN ('male', 'female', 'other')),
+    gender TEXT CHECK (gender IN ('male', 'female')),
     height_cm REAL CHECK (height_cm > 0),      -- cm
     weight_kg REAL CHECK (weight_kg > 0),       -- kg
 

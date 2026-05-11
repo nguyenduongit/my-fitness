@@ -27,7 +27,7 @@ export async function getNotificationSettings(): Promise<NotificationSettingsUps
         snack_time: data.snack_time,
         workout_time: data.workout_time,
         reminder_delay_minutes: data.reminder_delay_minutes,
-        notifications_enabled: data.notifications_enabled,
+        notifications_enabled: true,
     };
 }
 
@@ -49,6 +49,7 @@ export async function saveNotificationSettings(
             {
                 user_id: user.id,
                 ...settings,
+                notifications_enabled: true,
                 updated_at: new Date().toISOString(),
             },
             { onConflict: "user_id" }

@@ -1,7 +1,7 @@
 // ─── User Profile Types ──────────────────────────────────────────────────────
 // Thông tin cá nhân + chỉ số cơ thể
 
-export type Gender = "male" | "female" | "other";
+export type Gender = "male" | "female";
 
 export interface UserProfile {
     id: string;
@@ -43,7 +43,6 @@ export const DEFAULT_USER_PROFILE: UserProfileUpsert = {
 export const GENDER_LABELS: Record<Gender, string> = {
     male: "Nam",
     female: "Nữ",
-    other: "Khác",
 };
 
 export const BODY_MEASUREMENT_LABELS: Record<string, string> = {

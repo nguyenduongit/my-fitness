@@ -129,8 +129,7 @@ export async function GET(request: NextRequest) {
             const { data: matchingUsers } = await supabaseAdmin
                 .from("notification_settings")
                 .select("user_id")
-                .eq(field, currentTime)
-                .eq("notifications_enabled", true);
+                .eq(field, currentTime);
 
             if (matchingUsers && matchingUsers.length > 0) {
                 const template = NOTIFICATION_TEMPLATES[field];
@@ -151,16 +150,7 @@ export async function GET(request: NextRequest) {
             const uniqueUsers = [...new Set(waterMatches.map((w) => w.user_id))];
             const template = NOTIFICATION_TEMPLATES.water_reminder;
             for (const userId of uniqueUsers) {
-                // Kiểm tra notification enabled
-                const { data: settings } = await supabaseAdmin
-                    .from("notification_settings")
-                    .select("notifications_enabled")
-                    .eq("user_id", userId)
-                    .maybeSingle();
-
-                if (settings?.notifications_enabled !== false) {
-                    await sendToUser(userId, { ...template, url: "/" });
-                }
+                await sendToUser(userId, { ...template, url: "/" });
             }
             console.log(`💧 Sent water reminders to ${uniqueUsers.length} users`);
         }
