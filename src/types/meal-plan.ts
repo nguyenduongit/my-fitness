@@ -1,21 +1,31 @@
+// ─── Meal Plan Types ─────────────────────────────────────────────────────────
+// Thực đơn cố định theo thứ trong tuần (không thay đổi theo tuần)
+
+import { DayOfWeek } from "./schedule";
+
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
-export interface FoodItem {
+export interface MealPlanItem {
     id: string;
     user_id: string;
+    day_of_week: DayOfWeek;
     meal_type: MealType;
     name: string;
     calories: number;
-    protein: number; // gram
-    carbs: number;   // gram
-    fat: number;     // gram
+    protein: number;
+    carbs: number;
+    fat: number;
     quantity: number;
-    unit: string;    // "g", "ml", "phần", "cái", ...
-    eaten_at: string; // ISO date string (YYYY-MM-DD)
+    unit: string;
+    order_index: number;
     created_at: string;
+    updated_at: string;
 }
 
-export type FoodItemInsert = Omit<FoodItem, "id" | "user_id" | "created_at">;
+export type MealPlanItemInsert = Omit<
+    MealPlanItem,
+    "id" | "user_id" | "created_at" | "updated_at"
+>;
 
 export interface DailyGoal {
     calories: number;
@@ -30,6 +40,10 @@ export const DEFAULT_DAILY_GOAL: DailyGoal = {
     carbs: 200,
     fat: 65,
 };
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+export const MEAL_TYPES: MealType[] = ["breakfast", "lunch", "dinner", "snack"];
 
 export const MEAL_LABELS: Record<MealType, string> = {
     breakfast: "Bữa sáng",

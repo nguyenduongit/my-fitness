@@ -1,25 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { X, Search, Plus, ChevronDown } from "lucide-react";
+import { X, Search, Plus } from "lucide-react";
 import {
     MealType,
+    MealPlanItemInsert,
     MEAL_LABELS,
     MEAL_ICONS,
-    FoodItemInsert,
     FOOD_SUGGESTIONS,
-} from "@/types/menu";
+} from "@/types/meal-plan";
+import { DayOfWeek } from "@/types/schedule";
 
 interface AddFoodModalProps {
     defaultMealType: MealType;
-    date: string;
-    onAdd: (item: FoodItemInsert) => Promise<void>;
+    dayOfWeek: DayOfWeek;
+    onAdd: (item: MealPlanItemInsert) => Promise<void>;
     onClose: () => void;
 }
 
 export default function AddFoodModal({
     defaultMealType,
-    date,
+    dayOfWeek,
     onAdd,
     onClose,
 }: AddFoodModalProps) {
@@ -46,6 +47,7 @@ export default function AddFoodModal({
         try {
             await onAdd({
                 meal_type: selectedMeal,
+                day_of_week: dayOfWeek,
                 name: suggestion.name,
                 calories: suggestion.calories,
                 protein: suggestion.protein,
@@ -53,7 +55,7 @@ export default function AddFoodModal({
                 fat: suggestion.fat,
                 quantity: suggestion.quantity,
                 unit: suggestion.unit,
-                eaten_at: date,
+                order_index: 0,
             });
             onClose();
         } finally {
@@ -67,6 +69,7 @@ export default function AddFoodModal({
         try {
             await onAdd({
                 meal_type: selectedMeal,
+                day_of_week: dayOfWeek,
                 name: form.name,
                 calories: Number(form.calories),
                 protein: Number(form.protein) || 0,
@@ -74,7 +77,7 @@ export default function AddFoodModal({
                 fat: Number(form.fat) || 0,
                 quantity: Number(form.quantity) || 1,
                 unit: form.unit,
-                eaten_at: date,
+                order_index: 0,
             });
             onClose();
         } finally {

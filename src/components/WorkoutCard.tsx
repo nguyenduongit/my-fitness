@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Pencil, Trash2, Moon, Dumbbell } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Trash2, Moon, Check } from "lucide-react";
 import {
     WorkoutSession,
     DAY_FULL_LABELS,
@@ -13,15 +13,21 @@ import {
 interface WorkoutCardProps {
     session: WorkoutSession;
     isToday: boolean;
+    isCompleted?: boolean;
+    isToggling?: boolean;
     onEdit: (session: WorkoutSession) => void;
     onDelete: (id: string) => void;
+    onToggleComplete?: () => void;
 }
 
 export default function WorkoutCard({
     session,
     isToday,
+    isCompleted: completed = false,
+    isToggling = false,
     onEdit,
     onDelete,
+    onToggleComplete,
 }: WorkoutCardProps) {
     const [expanded, setExpanded] = useState(isToday);
     const [deleting, setDeleting] = useState(false);
@@ -40,10 +46,13 @@ export default function WorkoutCard({
 
     return (
         <div
-            className={`rounded-3xl border transition-all duration-300 overflow-hidden ${isToday
-                    ? "border-indigo-500/40 bg-gradient-to-br from-indigo-500/10 to-purple-500/5"
-                    : "border-white/5 bg-white/3"
-                }`}
+            className={`rounded-3xl border transition-all duration-300 overflow-hidden ${
+                completed
+                    ? "border-emerald-500/30 bg-gradient-to-br from-emerald-500/8 to-teal-500/5"
+                    : isToday
+                        ? "border-indigo-500/40 bg-gradient-to-br from-indigo-500/10 to-purple-500/5"
+                        : "border-white/5 bg-white/3"
+            }`}
         >
             {/* Card header */}
             <div
@@ -52,23 +61,32 @@ export default function WorkoutCard({
             >
                 {/* Day badge */}
                 <div
-                    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shrink-0 mr-4 ${isToday
-                            ? "bg-indigo-500/30 border border-indigo-500/40"
-                            : session.is_rest_day
-                                ? "bg-white/5 border border-white/10"
-                                : "bg-white/8 border border-white/10"
-                        }`}
+                    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shrink-0 mr-4 ${
+                        completed
+                            ? "bg-emerald-500/30 border border-emerald-500/40"
+                            : isToday
+                                ? "bg-indigo-500/30 border border-indigo-500/40"
+                                : session.is_rest_day
+                                    ? "bg-white/5 border border-white/10"
+                                    : "bg-white/8 border border-white/10"
+                    }`}
                 >
-                    <span
-                        className={`text-xs font-bold ${isToday ? "text-indigo-300" : "text-white/50"}`}
-                    >
-                        {DAY_FULL_LABELS[session.day_of_week].slice(0, 2).toUpperCase()}
-                    </span>
-                    <span
-                        className={`text-[10px] ${isToday ? "text-indigo-400" : "text-white/30"}`}
-                    >
-                        T{session.week_number}
-                    </span>
+                    {completed ? (
+                        <Check className="w-5 h-5 text-emerald-400" />
+                    ) : (
+                        <>
+                            <span
+                                className={`text-xs font-bold ${isToday ? "text-indigo-300" : "text-white/50"}`}
+                            >
+                                {DAY_FULL_LABELS[session.day_of_week].slice(0, 2).toUpperCase()}
+                            </span>
+                            <span
+                                className={`text-[10px] ${isToday ? "text-indigo-400" : "text-white/30"}`}
+                            >
+                                T{session.week_number}
+                            </span>
+                        </>
+                    )}
                 </div>
 
                 {/* Info */}
@@ -79,8 +97,13 @@ export default function WorkoutCard({
                                 HÔM NAY
                             </span>
                         )}
+                        {completed && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                ✓ HOÀN THÀNH
+                            </span>
+                        )}
                     </div>
-                    <h3 className="text-sm font-semibold text-white/90 truncate">
+                    <h3 className={`text-sm font-semibold truncate ${completed ? "text-white/50 line-through" : "text-white/90"}`}>
                         {session.is_rest_day ? "🛌 Nghỉ ngơi" : session.title}
                     </h3>
                     {!session.is_rest_day && (
@@ -113,6 +136,23 @@ export default function WorkoutCard({
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 ml-2">
+                    {/* Complete button (only for today, not rest day) */}
+                    {isToday && !session.is_rest_day && onToggleComplete && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleComplete();
+                            }}
+                            disabled={isToggling}
+                            className={`p-2 rounded-xl transition-all ${
+                                completed
+                                    ? "bg-emerald-500/20 active:bg-emerald-500/30"
+                                    : "bg-white/5 active:bg-emerald-500/15"
+                            } ${isToggling ? "opacity-50" : ""}`}
+                        >
+                            <Check className={`w-4 h-4 ${completed ? "text-emerald-400" : "text-white/30"}`} />
+                        </button>
+                    )}
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -162,7 +202,7 @@ export default function WorkoutCard({
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium text-white/90">{exercise.name}</p>
                                     <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                        {exercise.sets.map((set, idx) => (
+                                        {exercise.sets.map((set) => (
                                             <span
                                                 key={set.id}
                                                 className={`text-[11px] px-2 py-0.5 rounded-lg font-medium ${set.set_type === "warmup"
