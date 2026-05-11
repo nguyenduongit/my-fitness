@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { LogIn, Utensils } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { getMealPlanByDay, addMealPlanItem, deleteMealPlanItem, updateMealPlanItem } from "@/lib/meal-plans";
+import {
+    getMealPlanByDay,
+    addMealPlanItem,
+    deleteMealPlanItem,
+    updateMealPlanItem,
+} from "@/lib/meal-plans";
 import { getCompletionsByDate, toggleCompletion } from "@/lib/completions";
 import { getNutritionGoal } from "@/lib/nutrition-goals";
 import {
@@ -24,7 +29,7 @@ import DaySelector from "@/components/DaySelector";
 import MealBlock from "@/components/MealBlock";
 import { User } from "@supabase/supabase-js";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────
 
 function getCurrentDayOfWeek(): DayOfWeek {
     return new Date().getDay() as DayOfWeek;
@@ -37,7 +42,7 @@ function toDateString(date: Date) {
     return `${y}-${m}-${d}`;
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Main ───────────────────────────────────────────────────────────
 
 export default function MenuPage() {
     const [user, setUser] = useState<User | null>(null);
@@ -58,19 +63,21 @@ export default function MenuPage() {
     const today = toDateString(new Date());
     const isToday = selectedDay === todayDow;
 
-    // Auth
+    // ─── Auth ──────────────────────────────────────────────────────────
+
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
             setUser(session?.user ?? null);
             setAuthLoading(false);
         });
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
-            setUser(s?.user ?? null);
-        });
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            (_e, s) => setUser(s?.user ?? null)
+        );
         return () => subscription.unsubscribe();
     }, []);
 
-    // Load data
+    // ─── Load data ─────────────────────────────────────────────────────
+
     const loadData = useCallback(async () => {
         if (!user) return;
         setDataLoading(true);
@@ -94,11 +101,10 @@ export default function MenuPage() {
         const timeoutId = window.setTimeout(() => {
             loadData();
         }, 0);
-
         return () => window.clearTimeout(timeoutId);
     }, [loadData]);
 
-    // ─── Actions ──────────────────────────────────────────────────────────────
+    // ─── Actions ───────────────────────────────────────────────────────
 
     const handleAdd = async (item: MealPlanItemInsert) => {
         const newItem = await addMealPlanItem(item);
@@ -146,11 +152,30 @@ export default function MenuPage() {
         });
     };
 
-    // ─── Derived ──────────────────────────────────────────────────────────────
+    // ─── Adapter cho AddFoodModal ──────────────────────────────────────
 
-    // Derived data for summary was removed from here
+    const handleAddFoodFromLibrary = (food: {
+        name: string;
+        quantity: number;
+        unit: string;
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+    }) => {
+        const mealType = activeModal!; // activeModal luôn có giá trị khi gọi hàm này
+        const mealItems = items.filter((i) => i.meal_type === mealType);
+        const orderIndex = mealItems.length;
 
-    // ─── Not logged in ────────────────────────────────────────────────────────
+        handleAdd({
+            ...food,
+            day_of_week: selectedDay,
+            meal_type: mealType,
+            order_index: orderIndex,
+        });
+    };
+
+    // ─── Auth loading / Not logged in ─────────────────────────────────
 
     if (!authLoading && !user) {
         return (
@@ -158,7 +183,9 @@ export default function MenuPage() {
                 <div className="text-center">
                     <p className="text-5xl mb-4">🥗</p>
                     <h2 className="text-xl font-bold text-white/90 mb-2">Thực đơn</h2>
-                    <p className="text-sm text-white/50">Đăng nhập để thiết lập thực đơn hàng tuần</p>
+                    <p className="text-sm text-white/50">
+                        Đăng nhập để thiết lập thực đơn hàng tuần
+                    </p>
                 </div>
                 <button
                     onClick={handleLogin}
@@ -171,7 +198,7 @@ export default function MenuPage() {
         );
     }
 
-    // ─── Main UI ──────────────────────────────────────────────────────────────
+    // ─── Main UI ──────────────────────────────────────────────────────
 
     return (
         <main
@@ -187,13 +214,12 @@ export default function MenuPage() {
                 </p>
             </header>
 
-            {/* ── Day of Week Selector ──────────────────────────────────────────── */}
+            {/* Day Selector */}
             <div className="mb-5">
                 <DaySelector selectedDay={selectedDay} onSelectDay={setSelectedDay} />
             </div>
 
-
-            {/* ── Meal Sections ─────────────────────────────────────────────────── */}
+            {/* Meal Sections */}
             {dataLoading ? (
                 <div className="flex items-center justify-center py-12">
                     <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
@@ -223,7 +249,7 @@ export default function MenuPage() {
                 </div>
             )}
 
-            {/* ── Empty state ──────────────────────────────────────────────────── */}
+            {/* Empty state */}
             {!dataLoading && items.length === 0 && (
                 <div className="flex flex-col items-center py-8 gap-3">
                     <Utensils className="w-10 h-10 text-white/10" />
@@ -234,18 +260,43 @@ export default function MenuPage() {
                 </div>
             )}
 
-            {/* ── Add/Edit Food Modal ───────────────────────────────────────────── */}
+            {/* Add/Edit Food Modal */}
             {(activeModal || editingItem) && (
                 <AddFoodModal
-                    defaultMealType={activeModal || editingItem?.meal_type || "breakfast"}
-                    dayOfWeek={selectedDay}
-                    onAdd={handleAdd}
-                    onUpdate={handleUpdate}
+                    isOpen={true}
                     onClose={() => {
                         setActiveModal(null);
                         setEditingItem(null);
                     }}
-                    editItem={editingItem}
+                    onAdd={activeModal ? handleAddFoodFromLibrary : undefined}
+                    onUpdate={
+                        editingItem
+                            ? async (id, updates) => {
+                                await handleUpdate(id, {
+                                    ...updates,
+                                    meal_type: editingItem.meal_type,
+                                    day_of_week: editingItem.day_of_week,
+                                    order_index: editingItem.order_index,
+                                });
+                                setEditingItem(null);
+                            }
+                            : undefined
+                    }
+                    initialItem={
+                        editingItem
+                            ? {
+                                id: editingItem.id,
+                                name: editingItem.name,
+                                quantity: editingItem.quantity,
+                                unit: editingItem.unit,
+                                calories: editingItem.calories,
+                                protein: editingItem.protein,
+                                carbs: editingItem.carbs,
+                                fat: editingItem.fat,
+                                meal_type: editingItem.meal_type,
+                            }
+                            : undefined
+                    }
                 />
             )}
         </main>
