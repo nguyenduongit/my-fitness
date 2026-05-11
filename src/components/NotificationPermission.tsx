@@ -8,6 +8,7 @@ import {
   subscribeToPush,
   sendTestNotification,
 } from "@/lib/push.utils";
+import { supabase } from "@/lib/supabase";
 
 /**
  * NotificationPermission Component
@@ -15,6 +16,8 @@ import {
  * Displays the notification permission status and provides buttons to:
  * 1. Request notification permission and subscribe to push
  * 2. Send a test notification to verify the setup
+ *
+ * Subscriptions are saved to Supabase for backend-driven notifications.
  */
 
 type PermissionState = "default" | "granted" | "denied" | "unsupported" | "loading";
@@ -53,10 +56,18 @@ export default function NotificationPermission() {
           const existingSub = await reg.pushManager.getSubscription();
           if (existingSub) {
             setSubscription(existingSub);
+            // Re-save to backend
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await subscribeToPush(reg, user.id);
+            }
           } else {
             // iOS Safari PWA: subscription may have been lost, re-subscribe silently
-            const newSub = await subscribeToPush(reg);
-            if (newSub) setSubscription(newSub);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              const newSub = await subscribeToPush(reg, user.id);
+              if (newSub) setSubscription(newSub);
+            }
           }
         }
       });
@@ -85,13 +96,20 @@ export default function NotificationPermission() {
         return;
       }
 
-      // Step 3: Subscribe to push
-      const sub = await subscribeToPush(registration);
+      // Step 3: Get user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setStatusMessage("Vui lòng đăng nhập trước khi bật thông báo.");
+        return;
+      }
+
+      // Step 4: Subscribe to push (saves to Supabase)
+      const sub = await subscribeToPush(registration, user.id);
       if (sub) {
         setSubscription(sub);
-        setStatusMessage("✅ Successfully subscribed to notifications!");
+        setStatusMessage("✅ Đã bật thông báo thành công!");
       } else {
-        setStatusMessage("Failed to create push subscription. Check VAPID key configuration.");
+        setStatusMessage("Không thể tạo push subscription.");
       }
     } catch (error) {
       setStatusMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -103,7 +121,7 @@ export default function NotificationPermission() {
   // Handle "Test Notification" button click
   const handleTestNotification = useCallback(async () => {
     if (!subscription) {
-      setStatusMessage("Please subscribe to notifications first.");
+      setStatusMessage("Vui lòng bật thông báo trước.");
       return;
     }
 
@@ -113,9 +131,9 @@ export default function NotificationPermission() {
     try {
       const success = await sendTestNotification(subscription);
       if (success) {
-        setStatusMessage("🔔 Test notification sent! Check your notification center.");
+        setStatusMessage("🔔 Đã gửi thông báo thử! Kiểm tra notification center.");
       } else {
-        setStatusMessage("Failed to send test notification. Check your VAPID key configuration.");
+        setStatusMessage("Gửi thông báo thất bại.");
       }
     } catch (error) {
       setStatusMessage(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
@@ -139,11 +157,11 @@ export default function NotificationPermission() {
             }`}
         />
         <span className="text-white/60">
-          {permissionState === "loading" && "Checking notification support..."}
-          {permissionState === "unsupported" && "Push notifications are not supported"}
-          {permissionState === "default" && "Notifications not yet enabled"}
-          {permissionState === "granted" && "Notifications enabled"}
-          {permissionState === "denied" && "Notifications blocked"}
+          {permissionState === "loading" && "Đang kiểm tra..."}
+          {permissionState === "unsupported" && "Trình duyệt không hỗ trợ thông báo đẩy"}
+          {permissionState === "default" && "Chưa bật thông báo"}
+          {permissionState === "granted" && "Đã bật thông báo"}
+          {permissionState === "denied" && "Thông báo bị chặn"}
         </span>
       </div>
 
@@ -170,34 +188,17 @@ export default function NotificationPermission() {
               {isSubscribing ? (
                 <>
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Subscribing...
+                  Đang kết nối...
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                   </svg>
-                  Allow Notifications
+                  Bật thông báo
                 </>
               )}
             </span>
@@ -224,34 +225,17 @@ export default function NotificationPermission() {
               {isSending ? (
                 <>
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    />
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Sending...
+                  Đang gửi...
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                    />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                   </svg>
-                  Test Notification
+                  Gửi thông báo thử
                 </>
               )}
             </span>

@@ -3,6 +3,7 @@
  *
  * Helper functions for registering service workers,
  * requesting notification permissions, and managing push subscriptions.
+ * Subscriptions are saved to Supabase via API.
  */
 
 /**
@@ -67,10 +68,11 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
 
 /**
  * Subscribe to push notifications
- * Sends the subscription to the server API endpoint
+ * Sends the subscription to the server API endpoint and saves to Supabase
  */
 export async function subscribeToPush(
-  registration: ServiceWorkerRegistration
+  registration: ServiceWorkerRegistration,
+  userId: string
 ): Promise<PushSubscription | null> {
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
@@ -83,8 +85,6 @@ export async function subscribeToPush(
     // Check for existing subscription
     const existingSubscription = await registration.pushManager.getSubscription();
     if (existingSubscription) {
-      // Validate subscription is still active by checking expirationTime
-      // On iOS, subscriptions can expire silently
       const isExpired =
         existingSubscription.expirationTime !== null &&
         Date.now() > existingSubscription.expirationTime;
@@ -94,6 +94,16 @@ export async function subscribeToPush(
         await existingSubscription.unsubscribe();
       } else {
         console.log("📬 Already subscribed to push notifications.");
+        // Re-save to backend in case it was lost
+        await fetch("/api/send-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "subscribe",
+            subscription: existingSubscription.toJSON(),
+            user_id: userId,
+          }),
+        });
         return existingSubscription;
       }
     }
@@ -106,13 +116,14 @@ export async function subscribeToPush(
 
     console.log("✅ Push subscription created:", JSON.stringify(subscription));
 
-    // Send subscription to backend
+    // Send subscription to backend (saves to Supabase)
     await fetch("/api/send-notification", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "subscribe",
-        subscription,
+        subscription: subscription.toJSON(),
+        user_id: userId,
       }),
     });
 
