@@ -4,6 +4,7 @@ import {
     NotificationSettingsUpsert,
     DEFAULT_NOTIFICATION_SETTINGS,
 } from "@/types/notification-settings";
+import { normalizeReminderTime } from "@/lib/reminder-notifications";
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -21,11 +22,11 @@ export async function getNotificationSettings(): Promise<NotificationSettingsUps
     }
 
     return {
-        breakfast_time: data.breakfast_time,
-        lunch_time: data.lunch_time,
-        dinner_time: data.dinner_time,
-        snack_time: data.snack_time,
-        workout_time: data.workout_time,
+        breakfast_time: normalizeReminderTime(data.breakfast_time),
+        lunch_time: normalizeReminderTime(data.lunch_time),
+        dinner_time: normalizeReminderTime(data.dinner_time),
+        snack_time: normalizeReminderTime(data.snack_time),
+        workout_time: normalizeReminderTime(data.workout_time),
         reminder_delay_minutes: data.reminder_delay_minutes,
         notifications_enabled: true,
     };

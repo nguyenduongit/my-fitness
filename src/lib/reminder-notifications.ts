@@ -59,6 +59,11 @@ export function getCurrentReminderTime(date = new Date()): string {
     }).format(date);
 }
 
+export function normalizeReminderTime(time: string): string {
+    const [hours = "00", minutes = "00"] = time.split(":");
+    return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
+}
+
 export function getReminderDateKey(date = new Date()): string {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: REMINDER_TIME_ZONE,
@@ -73,4 +78,3 @@ export function getReminderDateKey(date = new Date()): string {
 
     return `${year}-${month}-${day}`;
 }
-

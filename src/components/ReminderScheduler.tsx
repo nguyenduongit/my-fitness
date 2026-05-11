@@ -5,6 +5,7 @@ import { getNotificationSettings } from "@/lib/notification-settings";
 import {
     getCurrentReminderTime,
     getReminderDateKey,
+    normalizeReminderTime,
     REMINDER_TEMPLATES,
 } from "@/lib/reminder-notifications";
 import type { ReminderKind, ReminderTemplate } from "@/lib/reminder-notifications";
@@ -27,7 +28,7 @@ const CHECK_INTERVAL_MS = 15_000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function getMsUntilTime(time: string) {
-    const [hours, minutes] = time.split(":").map(Number);
+    const [hours, minutes] = normalizeReminderTime(time).split(":").map(Number);
     const now = new Date();
     const target = new Date(now);
 
@@ -96,19 +97,23 @@ async function loadReminderEntries(): Promise<ReminderEntry[]> {
         for (const field of TIME_FIELDS) {
             entries.push({
                 kind: field,
-                time: settings[field],
+                time: normalizeReminderTime(settings[field]),
                 dedupeId: field,
             });
         }
     }
 
-    const waterSchedules = await getWaterSchedules();
-    for (const schedule of waterSchedules) {
-        entries.push({
-            kind: "water_reminder",
-            time: schedule.time,
-            dedupeId: `water-${schedule.id}`,
-        });
+    try {
+        const waterSchedules = await getWaterSchedules();
+        for (const schedule of waterSchedules) {
+            entries.push({
+                kind: "water_reminder",
+                time: normalizeReminderTime(schedule.time),
+                dedupeId: `water-${schedule.id}`,
+            });
+        }
+    } catch (error) {
+        console.warn("Failed to load water reminders:", error);
     }
 
     return entries;
@@ -195,8 +200,6 @@ export default function ReminderScheduler() {
     }, [checkDueReminders, clearExactTimers, scheduleExactTimers]);
 
     useEffect(() => {
-        if (!("Notification" in window)) return;
-
         refreshEntries().catch((error) => {
             console.error("Failed to load reminder schedule:", error);
         });
