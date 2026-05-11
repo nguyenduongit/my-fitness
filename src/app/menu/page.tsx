@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { LogIn, Utensils } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { getMealPlanByDay, addMealPlanItem, deleteMealPlanItem } from "@/lib/meal-plans";
+import { getMealPlanByDay, addMealPlanItem, deleteMealPlanItem, updateMealPlanItem } from "@/lib/meal-plans";
 import { getCompletionsByDate, toggleCompletion } from "@/lib/completions";
 import { getNutritionGoal } from "@/lib/nutrition-goals";
 import {
@@ -50,6 +50,7 @@ export default function MenuPage() {
     );
     const [dataLoading, setDataLoading] = useState(false);
     const [activeModal, setActiveModal] = useState<MealType | null>(null);
+    const [editingItem, setEditingItem] = useState<MealPlanItem | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
@@ -102,6 +103,11 @@ export default function MenuPage() {
     const handleAdd = async (item: MealPlanItemInsert) => {
         const newItem = await addMealPlanItem(item);
         setItems((prev) => [...prev, newItem]);
+    };
+
+    const handleUpdate = async (id: string, updates: Partial<MealPlanItemInsert>) => {
+        const updated = await updateMealPlanItem(id, updates);
+        setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
     };
 
     const handleDelete = async (id: string) => {
@@ -210,6 +216,7 @@ export default function MenuPage() {
                                 onToggleCompletion={handleToggleCompletion}
                                 onAddFood={setActiveModal}
                                 onDeleteFood={handleDelete}
+                                onEditFood={setEditingItem}
                             />
                         );
                     })}
@@ -227,13 +234,18 @@ export default function MenuPage() {
                 </div>
             )}
 
-            {/* ── Add Food Modal ───────────────────────────────────────────────── */}
-            {activeModal && (
+            {/* ── Add/Edit Food Modal ───────────────────────────────────────────── */}
+            {(activeModal || editingItem) && (
                 <AddFoodModal
-                    defaultMealType={activeModal}
+                    defaultMealType={activeModal || editingItem?.meal_type || "breakfast"}
                     dayOfWeek={selectedDay}
                     onAdd={handleAdd}
-                    onClose={() => setActiveModal(null)}
+                    onUpdate={handleUpdate}
+                    onClose={() => {
+                        setActiveModal(null);
+                        setEditingItem(null);
+                    }}
+                    editItem={editingItem}
                 />
             )}
         </main>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { X, Search, Plus, ChevronUp } from "lucide-react";
 import {
+    MealPlanItem,
     MealType,
     MealPlanItemInsert,
     MEAL_LABELS,
@@ -15,33 +16,51 @@ interface AddFoodModalProps {
     defaultMealType: MealType;
     dayOfWeek: DayOfWeek;
     onAdd: (item: MealPlanItemInsert) => Promise<void>;
+    onUpdate?: (id: string, updates: Partial<MealPlanItemInsert>) => Promise<void>;
     onClose: () => void;
+    editItem?: MealPlanItem | null;
 }
 
 export default function AddFoodModal({
     defaultMealType,
     dayOfWeek,
     onAdd,
+    onUpdate,
     onClose,
+    editItem = null,
 }: AddFoodModalProps) {
+    const isEditing = !!editItem;
     const [search, setSearch] = useState("");
-    const [selectedMeal, setSelectedMeal] = useState<MealType>(defaultMealType);
+    const [selectedMeal, setSelectedMeal] = useState<MealType>(editItem?.meal_type || defaultMealType);
     const [loading, setLoading] = useState(false);
-    const [showCustomForm, setShowCustomForm] = useState(false);
+    const [showCustomForm, setShowCustomForm] = useState(isEditing);
     
-    // For expandable suggestion
+    // For expandable suggestion or editing
     const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
-    const [inputQuantity, setInputQuantity] = useState<string>("");
+    const [inputQuantity, setInputQuantity] = useState<string>(editItem ? String(editItem.quantity) : "");
 
     const [form, setForm] = useState({
-        name: "",
-        calories: "",
-        protein: "",
-        carbs: "",
-        fat: "",
-        quantity: "1",
-        unit: "phần",
+        name: editItem?.name || "",
+        calories: editItem?.calories ? String(editItem.calories) : "",
+        protein: editItem?.protein ? String(editItem.protein) : "",
+        carbs: editItem?.carbs ? String(editItem.carbs) : "",
+        fat: editItem?.fat ? String(editItem.fat) : "",
+        quantity: editItem?.quantity ? String(editItem.quantity) : "1",
+        unit: editItem?.unit || "phần",
     });
+
+    // If editing, we want to know the "base" macros to recalculate when quantity changes
+    // Since we only store total macros, we estimate base per 1 unit
+    const baseMacros = useMemo(() => {
+        if (!editItem) return null;
+        const q = editItem.quantity || 1;
+        return {
+            calories: editItem.calories / q,
+            protein: editItem.protein / q,
+            carbs: editItem.carbs / q,
+            fat: editItem.fat / q,
+        };
+    }, [editItem]);
 
     const filtered = FOOD_SUGGESTIONS.filter((f) =>
         f.name.toLowerCase().includes(search.toLowerCase())
@@ -69,11 +88,11 @@ export default function AddFoodModal({
         }
     };
 
-    const handleCustomSubmit = async () => {
+    const handleFormSubmit = async () => {
         if (!form.name || !form.calories) return;
         setLoading(true);
         try {
-            await onAdd({
+            const payload = {
                 meal_type: selectedMeal,
                 day_of_week: dayOfWeek,
                 name: form.name,
@@ -83,12 +102,33 @@ export default function AddFoodModal({
                 fat: Number(form.fat) || 0,
                 quantity: Number(form.quantity) || 1,
                 unit: form.unit,
-                order_index: 0,
-            });
+                order_index: editItem?.order_index || 0,
+            };
+
+            if (isEditing && editItem && onUpdate) {
+                await onUpdate(editItem.id, payload);
+            } else {
+                await onAdd(payload);
+            }
             onClose();
         } finally {
             setLoading(false);
         }
+    };
+
+    // When quantity changes in edit mode, optionally recalculate macros
+    const handleQuantityChange = (newQtyStr: string) => {
+        const newQty = Number(newQtyStr);
+        setForm(prev => {
+            const updated = { ...prev, quantity: newQtyStr };
+            if (isEditing && baseMacros && newQty > 0) {
+                updated.calories = String(Math.round(baseMacros.calories * newQty));
+                updated.protein = String(Number((baseMacros.protein * newQty).toFixed(1)));
+                updated.carbs = String(Number((baseMacros.carbs * newQty).toFixed(1)));
+                updated.fat = String(Number((baseMacros.fat * newQty).toFixed(1)));
+            }
+            return updated;
+        });
     };
 
     return (
@@ -108,7 +148,9 @@ export default function AddFoodModal({
 
                 {/* Header */}
                 <div className="flex items-center justify-between px-5 py-3 shrink-0">
-                    <h2 className="text-lg font-semibold text-white">Thêm thực phẩm</h2>
+                    <h2 className="text-lg font-semibold text-white">
+                        {isEditing ? `Sửa: ${editItem.name}` : "Thêm thực phẩm"}
+                    </h2>
                     <button
                         onClick={onClose}
                         className="p-2 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors"
@@ -136,27 +178,29 @@ export default function AddFoodModal({
                     </div>
                 </div>
 
-                {/* Toggle custom / search */}
-                <div className="px-5 pb-3 flex gap-2 shrink-0">
-                    <button
-                        onClick={() => setShowCustomForm(false)}
-                        className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${!showCustomForm
-                                ? "bg-white/10 text-white"
-                                : "text-white/40 hover:text-white/60"
-                            }`}
-                    >
-                        Gợi ý
-                    </button>
-                    <button
-                        onClick={() => setShowCustomForm(true)}
-                        className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${showCustomForm
-                                ? "bg-white/10 text-white"
-                                : "text-white/40 hover:text-white/60"
-                            }`}
-                    >
-                        Tự nhập
-                    </button>
-                </div>
+                {/* Toggle custom / search - Hide if editing */}
+                {!isEditing && (
+                    <div className="px-5 pb-3 flex gap-2 shrink-0">
+                        <button
+                            onClick={() => setShowCustomForm(false)}
+                            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${!showCustomForm
+                                    ? "bg-white/10 text-white"
+                                    : "text-white/40 hover:text-white/60"
+                                }`}
+                        >
+                            Gợi ý
+                        </button>
+                        <button
+                            onClick={() => setShowCustomForm(true)}
+                            className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${showCustomForm
+                                    ? "bg-white/10 text-white"
+                                    : "text-white/40 hover:text-white/60"
+                                }`}
+                        >
+                            Tự nhập
+                        </button>
+                    </div>
+                )}
 
                 {/* Scrollable content */}
                 <div className="overflow-y-auto flex-1 px-5 pb-8">
@@ -257,7 +301,7 @@ export default function AddFoodModal({
                             </div>
                         </>
                     ) : (
-                        /* Custom form */
+                        /* Custom form (used for edit too) */
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs text-white/50 mb-1.5 block">Tên thực phẩm *</label>
@@ -276,7 +320,7 @@ export default function AddFoodModal({
                                     <input
                                         type="number"
                                         value={form.quantity}
-                                        onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                                        onChange={(e) => handleQuantityChange(e.target.value)}
                                         className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500/50"
                                     />
                                 </div>
@@ -321,11 +365,11 @@ export default function AddFoodModal({
                             </div>
 
                             <button
-                                onClick={handleCustomSubmit}
+                                onClick={handleFormSubmit}
                                 disabled={!form.name || !form.calories || loading}
                                 className="w-full py-4 rounded-2xl bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold transition-colors mt-2"
                             >
-                                {loading ? "Đang thêm..." : "Thêm thực phẩm"}
+                                {loading ? "Đang xử lý..." : isEditing ? "Cập nhật" : "Thêm thực phẩm"}
                             </button>
                         </div>
                     )}
