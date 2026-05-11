@@ -18,14 +18,15 @@ import { supabase } from "@/lib/supabase";
 import { getMealPlanByDay } from "@/lib/meal-plans";
 import { getWorkoutSessions } from "@/lib/schedule";
 import { getCompletionsByDate, toggleCompletion } from "@/lib/completions";
+import { getNutritionGoal } from "@/lib/nutrition-goals";
 import {
     MealPlanItem,
-    MealType,
     MEAL_TYPES,
     MEAL_LABELS,
     MEAL_ICONS,
-    DEFAULT_DAILY_GOAL,
 } from "@/types/meal-plan";
+import { DEFAULT_NUTRITION_GOAL } from "@/types/nutrition-goal";
+import type { NutritionGoalUpsert } from "@/types/nutrition-goal";
 import {
     WorkoutSession,
     DayOfWeek,
@@ -84,6 +85,9 @@ export default function DashboardPage() {
     const [mealItems, setMealItems] = useState<MealPlanItem[]>([]);
     const [sessions, setSessions] = useState<WorkoutSession[]>([]);
     const [completions, setCompletions] = useState<DailyCompletion[]>([]);
+    const [nutritionGoal, setNutritionGoal] = useState<NutritionGoalUpsert>(
+        DEFAULT_NUTRITION_GOAL
+    );
     const [dataLoading, setDataLoading] = useState(false);
     const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
@@ -92,7 +96,10 @@ export default function DashboardPage() {
 
     // Auth
     useEffect(() => {
-        setMounted(true);
+        const timeoutId = window.setTimeout(() => {
+            setMounted(true);
+        }, 0);
+
         supabase.auth.getSession().then(({ data: { session } }) => {
             setUser(session?.user ?? null);
             setAuthLoading(false);
@@ -102,7 +109,10 @@ export default function DashboardPage() {
         } = supabase.auth.onAuthStateChange((_e, s) => {
             setUser(s?.user ?? null);
         });
-        return () => subscription.unsubscribe();
+        return () => {
+            window.clearTimeout(timeoutId);
+            subscription.unsubscribe();
+        };
     }, []);
 
     // Load data
@@ -110,14 +120,16 @@ export default function DashboardPage() {
         if (!user) return;
         setDataLoading(true);
         try {
-            const [meals, workouts, todayCompletions] = await Promise.all([
+            const [meals, workouts, todayCompletions, savedNutritionGoal] = await Promise.all([
                 getMealPlanByDay(todayDow),
                 getWorkoutSessions(),
                 getCompletionsByDate(today),
+                getNutritionGoal(),
             ]);
             setMealItems(meals);
             setSessions(workouts);
             setCompletions(todayCompletions);
+            setNutritionGoal(savedNutritionGoal);
         } catch (e) {
             console.error("Dashboard data load error:", e);
         } finally {
@@ -126,7 +138,11 @@ export default function DashboardPage() {
     }, [user, todayDow, today]);
 
     useEffect(() => {
-        loadData();
+        const timeoutId = window.setTimeout(() => {
+            loadData();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
     }, [loadData]);
 
     // ─── Toggle completion ──────────────────────────────────────────────────────
@@ -150,7 +166,15 @@ export default function DashboardPage() {
 
     // ─── Derived data ───────────────────────────────────────────────────────────
 
-    const goal = DEFAULT_DAILY_GOAL;
+    const goal = useMemo(
+        () => ({
+            calories: Math.max(1, nutritionGoal.calories),
+            protein: Math.max(1, nutritionGoal.protein_g),
+            carbs: Math.max(1, nutritionGoal.carbs_g),
+            fat: Math.max(1, nutritionGoal.fat_g),
+        }),
+        [nutritionGoal]
+    );
 
     // Today's nutrition totals from meal plan
     const totals = useMemo(
@@ -362,7 +386,7 @@ export default function DashboardPage() {
                                 <div className="mt-3 flex items-center gap-1.5">
                                     <Utensils className="w-3 h-3 text-emerald-400" />
                                     <span className="text-[10px] text-white/40">
-                                        {totals.calories.toLocaleString()} kcal trong thực đơn
+                                        {totals.calories.toLocaleString()} / {goal.calories.toLocaleString()} kcal trong thực đơn
                                     </span>
                                 </div>
                             </div>

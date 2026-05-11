@@ -5,6 +5,7 @@ import { Plus, Trash2, LogIn, Check, Utensils } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getMealPlanByDay, addMealPlanItem, deleteMealPlanItem } from "@/lib/meal-plans";
 import { getCompletionsByDate, toggleCompletion } from "@/lib/completions";
+import { getNutritionGoal } from "@/lib/nutrition-goals";
 import {
     MealPlanItem,
     MealPlanItemInsert,
@@ -13,10 +14,11 @@ import {
     MEAL_LABELS,
     MEAL_ICONS,
     MEAL_COLORS,
-    DEFAULT_DAILY_GOAL,
 } from "@/types/meal-plan";
+import { DEFAULT_NUTRITION_GOAL } from "@/types/nutrition-goal";
+import type { NutritionGoalUpsert } from "@/types/nutrition-goal";
 import { DailyCompletion, isCompleted } from "@/types/completion";
-import { DayOfWeek, DAY_LABELS, DAY_FULL_LABELS } from "@/types/schedule";
+import { DayOfWeek, DAY_FULL_LABELS } from "@/types/schedule";
 import AddFoodModal from "@/components/AddFoodModal";
 import MacroRing from "@/components/MacroRing";
 import DaySelector from "@/components/DaySelector";
@@ -35,8 +37,6 @@ function toDateString(date: Date) {
     return `${y}-${m}-${d}`;
 }
 
-const ORDERED_DAYS: DayOfWeek[] = [1, 2, 3, 4, 5, 6, 0]; // T2 → CN
-
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 export default function MenuPage() {
@@ -45,6 +45,9 @@ export default function MenuPage() {
     const [selectedDay, setSelectedDay] = useState<DayOfWeek>(getCurrentDayOfWeek());
     const [items, setItems] = useState<MealPlanItem[]>([]);
     const [completions, setCompletions] = useState<DailyCompletion[]>([]);
+    const [nutritionGoal, setNutritionGoal] = useState<NutritionGoalUpsert>(
+        DEFAULT_NUTRITION_GOAL
+    );
     const [dataLoading, setDataLoading] = useState(false);
     const [activeModal, setActiveModal] = useState<MealType | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -71,12 +74,14 @@ export default function MenuPage() {
         if (!user) return;
         setDataLoading(true);
         try {
-            const [planItems, todayCompletions] = await Promise.all([
+            const [planItems, todayCompletions, savedNutritionGoal] = await Promise.all([
                 getMealPlanByDay(selectedDay),
                 isToday ? getCompletionsByDate(today) : Promise.resolve([]),
+                getNutritionGoal(),
             ]);
             setItems(planItems);
             setCompletions(todayCompletions);
+            setNutritionGoal(savedNutritionGoal);
         } catch (e) {
             console.error("Menu load error:", e);
         } finally {
@@ -84,7 +89,13 @@ export default function MenuPage() {
         }
     }, [user, selectedDay, isToday, today]);
 
-    useEffect(() => { loadData(); }, [loadData]);
+    useEffect(() => {
+        const timeoutId = window.setTimeout(() => {
+            loadData();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [loadData]);
 
     // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -145,7 +156,15 @@ export default function MenuPage() {
         [items]
     );
 
-    const goal = DEFAULT_DAILY_GOAL;
+    const goal = useMemo(
+        () => ({
+            calories: Math.max(1, nutritionGoal.calories),
+            protein: Math.max(1, nutritionGoal.protein_g),
+            carbs: Math.max(1, nutritionGoal.carbs_g),
+            fat: Math.max(1, nutritionGoal.fat_g),
+        }),
+        [nutritionGoal]
+    );
     const calPercent = goal.calories > 0 ? Math.min((totals.calories / goal.calories) * 100, 100) : 0;
     const completedMeals = MEAL_TYPES.filter((m) =>
         isCompleted(completions, "meal", m)

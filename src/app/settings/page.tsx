@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Clock, Bell, Timer, Save, CalendarDays, ChevronRight } from "lucide-react";
+import {
+    Clock,
+    Bell,
+    Timer,
+    Save,
+    CalendarDays,
+    ChevronRight,
+    UserRound,
+    Ruler,
+    Target,
+} from "lucide-react";
 import NotificationPermission from "@/components/NotificationPermission";
 import ScheduleSettingsModal from "@/components/ScheduleSettingsModal";
 import { supabase } from "@/lib/supabase";
@@ -17,13 +27,102 @@ import {
     TIME_FIELDS,
     TimeFieldKey,
 } from "@/types/notification-settings";
+import {
+    getUserProfile,
+    saveUserProfile,
+} from "@/lib/user-profile";
+import {
+    DEFAULT_USER_PROFILE,
+    GENDER_LABELS,
+    BODY_MEASUREMENT_ICONS,
+    BODY_MEASUREMENT_KEYS,
+    BODY_MEASUREMENT_LABELS,
+} from "@/types/user-profile";
+import type { Gender, UserProfileUpsert } from "@/types/user-profile";
+import {
+    getNutritionGoal,
+    saveNutritionGoal,
+} from "@/lib/nutrition-goals";
+import {
+    DEFAULT_NUTRITION_GOAL,
+    NUTRITION_FIELDS,
+    NUTRITION_ICONS,
+    NUTRITION_LABELS,
+    NUTRITION_UNITS,
+} from "@/types/nutrition-goal";
+import type { NutritionFieldKey, NutritionGoalUpsert } from "@/types/nutrition-goal";
 import { User } from "@supabase/supabase-js";
+
+type ProfileNumberField = Exclude<keyof UserProfileUpsert, "gender">;
+
+const PROFILE_BASIC_FIELDS: {
+    key: ProfileNumberField;
+    label: string;
+    unit: string;
+    min: number;
+    max?: number;
+    step: number;
+    icon: string;
+}[] = [
+    { key: "age", label: "Tuổi", unit: "tuổi", min: 1, max: 199, step: 1, icon: "🎂" },
+    { key: "height_cm", label: "Chiều cao", unit: "cm", min: 1, step: 0.1, icon: "📐" },
+    { key: "weight_kg", label: "Cân nặng", unit: "kg", min: 1, step: 0.1, icon: "⚖️" },
+];
+
+const NUTRITION_STEPS: Record<NutritionFieldKey, number> = {
+    calories: 50,
+    protein_g: 1,
+    carbs_g: 1,
+    fat_g: 1,
+    water_ml: 100,
+};
+
+function normalizePositiveNumber(value: number | null): number | null {
+    if (value == null || Number.isNaN(value) || value <= 0) return null;
+    return value;
+}
+
+function normalizeUserProfile(profile: UserProfileUpsert): UserProfileUpsert {
+    const age = normalizePositiveNumber(profile.age);
+
+    return {
+        age: age == null ? null : Math.min(199, Math.round(age)),
+        gender: profile.gender,
+        height_cm: normalizePositiveNumber(profile.height_cm),
+        weight_kg: normalizePositiveNumber(profile.weight_kg),
+        chest_cm: normalizePositiveNumber(profile.chest_cm),
+        waist_cm: normalizePositiveNumber(profile.waist_cm),
+        hip_cm: normalizePositiveNumber(profile.hip_cm),
+        bicep_cm: normalizePositiveNumber(profile.bicep_cm),
+        thigh_cm: normalizePositiveNumber(profile.thigh_cm),
+    };
+}
+
+function normalizeGoalNumber(value: number, fallback: number): number {
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function normalizeNutritionGoal(goal: NutritionGoalUpsert): NutritionGoalUpsert {
+    return {
+        calories: Math.round(normalizeGoalNumber(goal.calories, DEFAULT_NUTRITION_GOAL.calories)),
+        protein_g: normalizeGoalNumber(goal.protein_g, DEFAULT_NUTRITION_GOAL.protein_g),
+        carbs_g: normalizeGoalNumber(goal.carbs_g, DEFAULT_NUTRITION_GOAL.carbs_g),
+        fat_g: normalizeGoalNumber(goal.fat_g, DEFAULT_NUTRITION_GOAL.fat_g),
+        water_ml: Math.round(normalizeGoalNumber(goal.water_ml, DEFAULT_NUTRITION_GOAL.water_ml)),
+    };
+}
 
 export default function SettingsPage() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState<NotificationSettingsUpsert>(
         DEFAULT_NOTIFICATION_SETTINGS
+    );
+    const [profile, setProfile] = useState<UserProfileUpsert>(
+        DEFAULT_USER_PROFILE
+    );
+    const [nutritionGoal, setNutritionGoal] = useState<NutritionGoalUpsert>(
+        DEFAULT_NUTRITION_GOAL
     );
     const [settingsLoading, setSettingsLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -44,34 +143,50 @@ export default function SettingsPage() {
         return () => subscription.unsubscribe();
     }, []);
 
-    // Load notification settings
+    // Load user settings
     const loadSettings = useCallback(async () => {
         if (!user) return;
+        await Promise.resolve();
         setSettingsLoading(true);
         try {
-            const data = await getNotificationSettings();
-            setSettings(data);
+            const [notificationData, profileData, nutritionData] = await Promise.all([
+                getNotificationSettings(),
+                getUserProfile(),
+                getNutritionGoal(),
+            ]);
+            setSettings(notificationData);
+            setProfile(profileData);
+            setNutritionGoal(nutritionData);
+            setHasChanges(false);
+            setSaveMessage("");
         } catch (e) {
-            console.error("Failed to load notification settings:", e);
+            console.error("Failed to load settings:", e);
         } finally {
             setSettingsLoading(false);
         }
     }, [user]);
 
     useEffect(() => {
-        loadSettings();
+        const timeoutId = window.setTimeout(() => {
+            loadSettings();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
     }, [loadSettings]);
 
-    const handleTimeChange = (field: TimeFieldKey, value: string) => {
-        setSettings((prev) => ({ ...prev, [field]: value }));
+    const markChanged = () => {
         setHasChanges(true);
         setSaveMessage("");
     };
 
+    const handleTimeChange = (field: TimeFieldKey, value: string) => {
+        setSettings((prev) => ({ ...prev, [field]: value }));
+        markChanged();
+    };
+
     const handleDelayChange = (value: number) => {
         setSettings((prev) => ({ ...prev, reminder_delay_minutes: value }));
-        setHasChanges(true);
-        setSaveMessage("");
+        markChanged();
     };
 
     const handleToggleEnabled = () => {
@@ -79,15 +194,50 @@ export default function SettingsPage() {
             ...prev,
             notifications_enabled: !prev.notifications_enabled,
         }));
-        setHasChanges(true);
-        setSaveMessage("");
+        markChanged();
+    };
+
+    const handleProfileNumberChange = (
+        field: ProfileNumberField,
+        value: string
+    ) => {
+        const nextValue = value === "" ? null : Number(value);
+        if (nextValue !== null && Number.isNaN(nextValue)) return;
+
+        setProfile((prev) => ({ ...prev, [field]: nextValue }));
+        markChanged();
+    };
+
+    const handleGenderChange = (gender: Gender) => {
+        setProfile((prev) => ({ ...prev, gender }));
+        markChanged();
+    };
+
+    const handleNutritionChange = (field: NutritionFieldKey, value: string) => {
+        const nextValue = value === "" ? 0 : Number(value);
+        if (Number.isNaN(nextValue)) return;
+
+        setNutritionGoal((prev) => ({ ...prev, [field]: nextValue }));
+        markChanged();
     };
 
     const handleSave = async () => {
+        if (!user) return;
+
         setSaving(true);
         setSaveMessage("");
         try {
-            await saveNotificationSettings(settings);
+            const normalizedProfile = normalizeUserProfile(profile);
+            const normalizedNutritionGoal = normalizeNutritionGoal(nutritionGoal);
+
+            await Promise.all([
+                saveNotificationSettings(settings),
+                saveUserProfile(normalizedProfile),
+                saveNutritionGoal(normalizedNutritionGoal),
+            ]);
+
+            setProfile(normalizedProfile);
+            setNutritionGoal(normalizedNutritionGoal);
             setSaveMessage("✅ Đã lưu cài đặt thành công!");
             setHasChanges(false);
         } catch (e) {
@@ -121,6 +271,157 @@ export default function SettingsPage() {
             </h1>
 
             <div className="space-y-4">
+                {/* ── Profile Settings ─────────────────────────────────────────────── */}
+                {user && (
+                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                        <div className="flex items-center gap-2 mb-4">
+                            <UserRound className="w-4 h-4 text-cyan-400" />
+                            <h3 className="font-semibold text-base text-white/90">Thông tin profile</h3>
+                        </div>
+
+                        {settingsLoading ? (
+                            <div className="flex justify-center py-6">
+                                <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="p-3 rounded-xl bg-white/5 border border-white/5">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-base">⚧</span>
+                                        <span className="text-xs text-white/45 font-medium">Giới tính</span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {(["male", "female", "other"] as Gender[]).map((gender) => (
+                                            <button
+                                                key={gender}
+                                                type="button"
+                                                onClick={() => handleGenderChange(gender)}
+                                                className={`min-w-0 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors ${
+                                                    profile.gender === gender
+                                                        ? "bg-cyan-500/25 text-cyan-200 border border-cyan-500/35"
+                                                        : "bg-white/5 text-white/45 border border-white/5 active:bg-white/10"
+                                                }`}
+                                            >
+                                                {GENDER_LABELS[gender]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2.5">
+                                    {PROFILE_BASIC_FIELDS.map((field) => (
+                                        <label
+                                            key={field.key}
+                                            className={field.key === "age" ? "block p-3 rounded-xl bg-white/5 border border-white/5 col-span-2" : "block p-3 rounded-xl bg-white/5 border border-white/5"}
+                                        >
+                                            <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
+                                                <span className="text-base">{field.icon}</span>
+                                                {field.label}
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    min={field.min}
+                                                    max={field.max}
+                                                    step={field.step}
+                                                    value={profile[field.key] ?? ""}
+                                                    onChange={(e) =>
+                                                        handleProfileNumberChange(field.key, e.target.value)
+                                                    }
+                                                    placeholder="--"
+                                                    className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none placeholder:text-white/20"
+                                                />
+                                                <span className="shrink-0 text-xs text-white/35">{field.unit}</span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Ruler className="w-3.5 h-3.5 text-white/35" />
+                                        <p className="text-xs font-medium text-white/45">Số đo cơ thể</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                        {BODY_MEASUREMENT_KEYS.map((field) => (
+                                            <label
+                                                key={field}
+                                                className="block p-3 rounded-xl bg-white/5 border border-white/5"
+                                            >
+                                                <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
+                                                    <span className="text-base">{BODY_MEASUREMENT_ICONS[field]}</span>
+                                                    {BODY_MEASUREMENT_LABELS[field]}
+                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        step={0.1}
+                                                        value={profile[field] ?? ""}
+                                                        onChange={(e) =>
+                                                            handleProfileNumberChange(field, e.target.value)
+                                                        }
+                                                        placeholder="--"
+                                                        className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none placeholder:text-white/20"
+                                                    />
+                                                    <span className="shrink-0 text-xs text-white/35">cm</span>
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ── Nutrition Goal Settings ─────────────────────────────────────── */}
+                {user && (
+                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Target className="w-4 h-4 text-orange-400" />
+                            <h3 className="font-semibold text-base text-white/90">
+                                Mục tiêu dinh dưỡng ngày
+                            </h3>
+                        </div>
+
+                        {settingsLoading ? (
+                            <div className="flex justify-center py-6">
+                                <div className="w-5 h-5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-2.5">
+                                {NUTRITION_FIELDS.map((field) => (
+                                    <label
+                                        key={field}
+                                        className="block p-3 rounded-xl bg-white/5 border border-white/5"
+                                    >
+                                        <span className="flex items-center gap-2 text-xs text-white/45 font-medium mb-2">
+                                            <span className="text-base">{NUTRITION_ICONS[field]}</span>
+                                            {NUTRITION_LABELS[field]}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                step={NUTRITION_STEPS[field]}
+                                                value={nutritionGoal[field]}
+                                                onChange={(e) =>
+                                                    handleNutritionChange(field, e.target.value)
+                                                }
+                                                className="min-w-0 flex-1 bg-transparent text-base font-semibold text-white outline-none"
+                                            />
+                                            <span className="shrink-0 text-xs text-white/35">
+                                                {NUTRITION_UNITS[field]}
+                                            </span>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* ── Schedule Settings ──────────────────────────────────────────────── */}
                 {user && (
                     <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
@@ -234,30 +535,6 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
 
-                                {/* Save button */}
-                                {hasChanges && (
-                                    <button
-                                        onClick={handleSave}
-                                        disabled={saving}
-                                        className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-medium text-sm active:bg-indigo-500/30 transition-colors disabled:opacity-50"
-                                    >
-                                        <Save className="w-4 h-4" />
-                                        {saving ? "Đang lưu..." : "Lưu cài đặt"}
-                                    </button>
-                                )}
-
-                                {/* Status message */}
-                                {saveMessage && (
-                                    <p
-                                        className={`mt-3 text-xs text-center px-4 py-2 rounded-lg ${
-                                            saveMessage.startsWith("✅")
-                                                ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-                                                : "bg-red-500/10 text-red-300 border border-red-500/20"
-                                        }`}
-                                    >
-                                        {saveMessage}
-                                    </p>
-                                )}
                             </>
                         )}
 
@@ -268,6 +545,34 @@ export default function SettingsPage() {
                                 thời gian đã cài đặt để hỏi bạn đã hoàn thành chưa.
                             </p>
                         </div>
+                    </div>
+                )}
+
+                {/* ── Save All ─────────────────────────────────────────────────────── */}
+                {user && (hasChanges || saveMessage) && (
+                    <div className="space-y-3">
+                        {hasChanges && (
+                            <button
+                                onClick={handleSave}
+                                disabled={saving || settingsLoading}
+                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 font-medium text-sm active:bg-indigo-500/30 transition-colors disabled:opacity-50"
+                            >
+                                <Save className="w-4 h-4" />
+                                {saving ? "Đang lưu..." : "Lưu cài đặt"}
+                            </button>
+                        )}
+
+                        {saveMessage && (
+                            <p
+                                className={`text-xs text-center px-4 py-2 rounded-lg ${
+                                    saveMessage.startsWith("✅")
+                                        ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
+                                        : "bg-red-500/10 text-red-300 border border-red-500/20"
+                                }`}
+                            >
+                                {saveMessage}
+                            </p>
+                        )}
                     </div>
                 )}
 
