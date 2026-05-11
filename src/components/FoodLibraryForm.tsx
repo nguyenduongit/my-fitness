@@ -9,6 +9,17 @@ interface FoodLibraryFormProps {
     onClose: () => void;
 }
 
+function getErrorMessage(error: unknown) {
+    if (error instanceof Error) return error.message;
+
+    if (error && typeof error === "object" && "message" in error) {
+        const message = (error as { message?: unknown }).message;
+        if (typeof message === "string") return message;
+    }
+
+    return "Không thể lưu thực phẩm. Vui lòng thử lại.";
+}
+
 export default function FoodLibraryForm({
     editItem,
     onSave,
@@ -31,6 +42,7 @@ export default function FoodLibraryForm({
         vitamin_d: editItem?.vitamin_d ? String(editItem.vitamin_d) : "",
     });
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
     const handleChange = (key: string, value: string) => {
         setForm((prev) => ({ ...prev, [key]: value }));
@@ -39,6 +51,7 @@ export default function FoodLibraryForm({
     const handleSubmit = async () => {
         if (!form.name || !form.calories) return;
         setLoading(true);
+        setError("");
         try {
             const payload: FoodLibraryItemInsert = {
                 name: form.name,
@@ -57,6 +70,8 @@ export default function FoodLibraryForm({
                 vitamin_d: Number(form.vitamin_d) || 0,
             };
             await onSave(payload);
+        } catch (err) {
+            setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
@@ -190,6 +205,12 @@ export default function FoodLibraryForm({
                         />
                     </div>
                 </div>
+
+                {error && (
+                    <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                        {error}
+                    </p>
+                )}
 
                 <button
                     onClick={handleSubmit}
