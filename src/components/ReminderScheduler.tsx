@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getNotificationSettings } from "@/lib/notification-settings";
 import {
     getCurrentReminderTime,
     getReminderDateKey,
     REMINDER_TEMPLATES,
-    ReminderKind,
 } from "@/lib/reminder-notifications";
+import type { ReminderKind, ReminderTemplate } from "@/lib/reminder-notifications";
 import { supabase } from "@/lib/supabase";
 import { getWaterSchedules } from "@/lib/water";
 import { TIME_FIELDS } from "@/types/notification-settings";
@@ -16,6 +16,10 @@ type ReminderEntry = {
     kind: ReminderKind;
     time: string;
     dedupeId: string;
+};
+
+type ActiveReminder = ReminderTemplate & {
+    tag: string;
 };
 
 const REMINDER_EVENT = "myfitness:reminders-updated";
@@ -37,7 +41,7 @@ function getMsUntilTime(time: string) {
 }
 
 function buildNotificationTag(entry: ReminderEntry) {
-    return `myfitness-${entry.kind}-${getReminderDateKey()}-${entry.dedupeId}`;
+    return `myfitness-${entry.kind}-${getReminderDateKey()}-${entry.time}-${entry.dedupeId}`;
 }
 
 function wasShownToday(entry: ReminderEntry) {
@@ -48,16 +52,14 @@ function markShownToday(entry: ReminderEntry) {
     localStorage.setItem(buildNotificationTag(entry), "shown");
 }
 
-async function showReminder(entry: ReminderEntry) {
+async function showNativeReminder(template: ReminderTemplate, tag: string) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
-    if (wasShownToday(entry)) return;
 
-    const template = REMINDER_TEMPLATES[entry.kind];
     const options: NotificationOptions = {
         body: template.body,
         icon: template.icon,
         badge: template.icon,
-        tag: buildNotificationTag(entry),
+        tag,
         data: { url: template.url },
     };
 
@@ -70,8 +72,20 @@ async function showReminder(entry: ReminderEntry) {
     } else {
         new Notification(template.title, options);
     }
+}
 
+async function showDueReminder(
+    entry: ReminderEntry,
+    showInAppReminder: (reminder: ActiveReminder) => void
+) {
+    if (wasShownToday(entry)) return;
+
+    const template = REMINDER_TEMPLATES[entry.kind];
+    const tag = buildNotificationTag(entry);
+
+    showInAppReminder({ ...template, tag });
     markShownToday(entry);
+    await showNativeReminder(template, tag);
 }
 
 async function loadReminderEntries(): Promise<ReminderEntry[]> {
@@ -106,20 +120,34 @@ export function dispatchReminderScheduleRefresh() {
 }
 
 export default function ReminderScheduler() {
+    const [activeReminder, setActiveReminder] = useState<ActiveReminder | null>(null);
     const entriesRef = useRef<ReminderEntry[]>([]);
     const intervalRef = useRef<number | null>(null);
     const timeoutRefs = useRef<number[]>([]);
+    const dismissTimeoutRef = useRef<number | null>(null);
+
+    const showInAppReminder = useCallback((reminder: ActiveReminder) => {
+        setActiveReminder(reminder);
+
+        if (dismissTimeoutRef.current !== null) {
+            window.clearTimeout(dismissTimeoutRef.current);
+        }
+
+        dismissTimeoutRef.current = window.setTimeout(() => {
+            setActiveReminder((current) => (current?.tag === reminder.tag ? null : current));
+        }, 12_000);
+    }, []);
 
     const checkDueReminders = useCallback(() => {
         const currentTime = getCurrentReminderTime();
         const dueEntries = entriesRef.current.filter((entry) => entry.time === currentTime);
 
         for (const entry of dueEntries) {
-            showReminder(entry).catch((error) => {
+            showDueReminder(entry, showInAppReminder).catch((error) => {
                 console.error("Failed to show reminder notification:", error);
             });
         }
-    }, []);
+    }, [showInAppReminder]);
 
     const clearExactTimers = useCallback(() => {
         for (const timeoutId of timeoutRefs.current) {
@@ -133,12 +161,12 @@ export default function ReminderScheduler() {
 
         for (const entry of entriesRef.current) {
             const timeoutId = window.setTimeout(() => {
-                showReminder(entry).catch((error) => {
+                showDueReminder(entry, showInAppReminder).catch((error) => {
                     console.error("Failed to show reminder notification:", error);
                 });
 
                 const intervalId = window.setInterval(() => {
-                    showReminder(entry).catch((error) => {
+                    showDueReminder(entry, showInAppReminder).catch((error) => {
                         console.error("Failed to show reminder notification:", error);
                     });
                 }, ONE_DAY_MS);
@@ -148,7 +176,7 @@ export default function ReminderScheduler() {
 
             timeoutRefs.current.push(timeoutId);
         }
-    }, [clearExactTimers]);
+    }, [clearExactTimers, showInAppReminder]);
 
     const refreshEntries = useCallback(async () => {
         const {
@@ -201,6 +229,9 @@ export default function ReminderScheduler() {
             if (intervalRef.current !== null) {
                 window.clearInterval(intervalRef.current);
             }
+            if (dismissTimeoutRef.current !== null) {
+                window.clearTimeout(dismissTimeoutRef.current);
+            }
             clearExactTimers();
             window.removeEventListener("focus", handleFocus);
             window.removeEventListener(REMINDER_EVENT, handleFocus);
@@ -209,5 +240,33 @@ export default function ReminderScheduler() {
         };
     }, [checkDueReminders, clearExactTimers, refreshEntries]);
 
-    return null;
+    if (!activeReminder) return null;
+
+    return (
+        <div
+            role="status"
+            aria-live="polite"
+            className="fixed left-4 right-4 top-[max(1rem,env(safe-area-inset-top,0px))] z-50 mx-auto max-w-md rounded-2xl border border-amber-300/25 bg-slate-950/95 p-4 text-white shadow-2xl shadow-black/40 backdrop-blur-md"
+        >
+            <div className="flex items-start gap-3">
+                <span
+                    aria-hidden="true"
+                    className="mt-0.5 h-10 w-10 shrink-0 rounded-xl bg-cover bg-center"
+                    style={{ backgroundImage: `url(${activeReminder.icon})` }}
+                />
+                <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-white">{activeReminder.title}</p>
+                    <p className="mt-1 text-sm leading-5 text-white/70">{activeReminder.body}</p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setActiveReminder(null)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/5 text-lg leading-none text-white/60 active:bg-white/10"
+                    aria-label="Dong thong bao"
+                >
+                    x
+                </button>
+            </div>
+        </div>
+    );
 }
