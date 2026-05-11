@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { dispatchReminderScheduleRefresh } from "@/components/ReminderScheduler";
 import {
     ArrowLeft,
     CalendarDays,
@@ -337,6 +338,7 @@ export default function SettingsDetailPage({ section }: SettingsDetailPageProps)
 
             if (section === "reminders") {
                 await saveNotificationSettings({ ...settings, notifications_enabled: true });
+                dispatchReminderScheduleRefresh();
             }
 
             setSaveMessage("Đã lưu cài đặt thành công!");

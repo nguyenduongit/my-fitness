@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
+import {
+    getCurrentReminderTime,
+    REMINDER_TEMPLATES,
+    ReminderKind,
+} from "@/lib/reminder-notifications";
+import { TIME_FIELDS } from "@/types/notification-settings";
 
 /**
  * API Route: /api/cron/send-reminders
@@ -26,51 +32,13 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 // ─── Notification templates ──────────────────────────────────────────────────
 
-const NOTIFICATION_TEMPLATES: Record<string, { title: string; body: string; icon: string }> = {
-    breakfast_time: {
-        title: "🌅 Đến giờ ăn sáng!",
-        body: "Bắt đầu ngày mới với bữa sáng đầy năng lượng nhé!",
-        icon: "/icons/icon-192x192.png",
-    },
-    lunch_time: {
-        title: "☀️ Đến giờ ăn trưa!",
-        body: "Nạp năng lượng cho buổi chiều. Ăn đúng bữa nhé!",
-        icon: "/icons/icon-192x192.png",
-    },
-    dinner_time: {
-        title: "🌙 Đến giờ ăn tối!",
-        body: "Bữa tối nhẹ nhàng giúp bạn nghỉ ngơi tốt hơn.",
-        icon: "/icons/icon-192x192.png",
-    },
-    snack_time: {
-        title: "🍎 Giờ ăn phụ!",
-        body: "Một bữa nhẹ giúp duy trì năng lượng suốt cả ngày.",
-        icon: "/icons/icon-192x192.png",
-    },
-    workout_time: {
-        title: "🏋️ Đến giờ tập luyện!",
-        body: "Hãy vận động để khoẻ mạnh hơn mỗi ngày!",
-        icon: "/icons/icon-192x192.png",
-    },
-    water_reminder: {
-        title: "💧 Nhắc uống nước!",
-        body: "Đừng quên uống nước đều đặn để giữ cơ thể khoẻ mạnh.",
-        icon: "/icons/icon-192x192.png",
-    },
-};
+export const runtime = "nodejs";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getCurrentTimeHHMM(offsetHours: number = 7): string {
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const local = new Date(utc + offsetHours * 3600000);
-    const hh = String(local.getHours()).padStart(2, "0");
-    const mm = String(local.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
-}
-
 async function sendToUser(userId: string, payload: { title: string; body: string; icon: string; url?: string }) {
+    if (!vapidPublicKey || !vapidPrivateKey) return 0;
+
     const { data: subs } = await supabaseAdmin
         .from("push_subscriptions")
         .select("*")
@@ -119,22 +87,21 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const currentTime = getCurrentTimeHHMM(7); // UTC+7
+        const currentTime = getCurrentReminderTime();
         console.log(`⏰ Cron running at ${currentTime}`);
 
         // 1. Kiểm tra notification_settings - giờ ăn/tập
-        const timeFields = ["breakfast_time", "lunch_time", "dinner_time", "snack_time", "workout_time"];
-
-        for (const field of timeFields) {
+        for (const field of TIME_FIELDS) {
             const { data: matchingUsers } = await supabaseAdmin
                 .from("notification_settings")
                 .select("user_id")
+                .eq("notifications_enabled", true)
                 .eq(field, currentTime);
 
             if (matchingUsers && matchingUsers.length > 0) {
-                const template = NOTIFICATION_TEMPLATES[field];
+                const template = REMINDER_TEMPLATES[field as ReminderKind];
                 for (const row of matchingUsers) {
-                    await sendToUser(row.user_id, { ...template, url: "/" });
+                    await sendToUser(row.user_id, template);
                 }
                 console.log(`📤 Sent ${field} notifications to ${matchingUsers.length} users`);
             }
@@ -148,9 +115,9 @@ export async function GET(request: NextRequest) {
 
         if (waterMatches && waterMatches.length > 0) {
             const uniqueUsers = [...new Set(waterMatches.map((w) => w.user_id))];
-            const template = NOTIFICATION_TEMPLATES.water_reminder;
+            const template = REMINDER_TEMPLATES.water_reminder;
             for (const userId of uniqueUsers) {
-                await sendToUser(userId, { ...template, url: "/" });
+                await sendToUser(userId, template);
             }
             console.log(`💧 Sent water reminders to ${uniqueUsers.length} users`);
         }
