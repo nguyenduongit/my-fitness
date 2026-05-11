@@ -10,6 +10,7 @@ import {
     LogOut,
     Target,
     UserRound,
+    Utensils,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { User } from "@supabase/supabase-js";
@@ -42,6 +43,13 @@ const settingItems = [
         href: "/settings/reminders",
         icon: Bell,
         iconClassName: "text-amber-400 bg-amber-500/10 border-amber-500/15",
+    },
+    {
+        title: "Thư viện thực phẩm",
+        description: "Quản lý thông tin dinh dưỡng các loại thực phẩm",
+        href: "/settings/food-library",
+        icon: Utensils,
+        iconClassName: "text-green-400 bg-green-500/10 border-green-500/15",
     },
 ];
 
