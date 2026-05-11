@@ -216,6 +216,12 @@ curl -X POST http://localhost:3000/api/send-notification \
    }
    ```
 
+### Scheduled Reminders
+
+Vercel Hobby accounts only support daily cron jobs, so production reminders use an external free scheduler instead of `vercel.json` cron configuration.
+
+See [Free Reminder Cron Setup](docs/free-reminder-cron.md).
+
 ---
 
 ## 🔍 Lighthouse Audit (Desktop & Mobile)
