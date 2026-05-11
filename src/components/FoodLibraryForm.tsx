@@ -63,8 +63,16 @@ export default function FoodLibraryForm({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm">
-            <div className="w-full max-w-md bg-zinc-900 rounded-t-3xl p-6 animate-slide-up">
+        <div
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            style={{
+                paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))",
+                paddingTop: "env(safe-area-inset-top, 0px)",
+            }}
+        >
+            <div
+                className="w-full max-w-md bg-zinc-900 rounded-t-3xl p-6 animate-slide-up flex max-h-[calc(100dvh-7rem)] flex-col"
+            >
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold">
                         {editItem ? "Sửa thực phẩm" : "Thêm thực phẩm"}
@@ -74,7 +82,7 @@ export default function FoodLibraryForm({
                     </button>
                 </div>
 
-                <div className="space-y-3 max-h-[70vh] overflow-y-auto">
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
                     {/* Macro cơ bản */}
                     <input
                         placeholder="Tên thực phẩm *"
@@ -186,7 +194,7 @@ export default function FoodLibraryForm({
                 <button
                     onClick={handleSubmit}
                     disabled={loading || !form.name || !form.calories}
-                    className="w-full mt-4 py-3 bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 rounded-xl font-semibold text-white transition-colors disabled:opacity-50"
+                    className="w-full mt-4 shrink-0 py-3 bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 rounded-xl font-semibold text-white transition-colors disabled:opacity-50"
                 >
                     {loading ? "Đang xử lý..." : editItem ? "Cập nhật" : "Thêm thực phẩm"}
                 </button>
