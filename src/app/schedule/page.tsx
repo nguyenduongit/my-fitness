@@ -1,23 +1,24 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, LogIn, CalendarDays, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { LogIn, CalendarDays, Check } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import {
     getWorkoutSessions,
     createWorkoutSession,
     updateWorkoutSession,
-    deleteWorkoutSession,
 } from "@/lib/schedule";
 import { getCompletionsByDate, toggleCompletion } from "@/lib/completions";
 import {
     WorkoutSession,
-    WorkoutSessionInsert,
     DayOfWeek,
+    DAY_FULL_LABELS,
+    Exercise,
 } from "@/types/schedule";
 import { DailyCompletion, isCompleted, WORKOUT_COMPLETION_KEY } from "@/types/completion";
 import WorkoutCard from "@/components/WorkoutCard";
-import WorkoutFormModal from "@/components/WorkoutFormModal";
+import ExerciseFormModal from "@/components/ExerciseFormModal";
+import DaySelector from "@/components/DaySelector";
 import { User } from "@supabase/supabase-js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -41,9 +42,12 @@ export default function SchedulePage() {
     const [dataLoading, setDataLoading] = useState(false);
     const [togglingWorkout, setTogglingWorkout] = useState(false);
 
-    const [activeWeek, setActiveWeek] = useState(1);
+    const activeWeek = 1;
+    const [selectedDay, setSelectedDay] = useState<DayOfWeek>(getCurrentDayOfWeek());
+    
+    // Modal state for Exercise
     const [showModal, setShowModal] = useState(false);
-    const [editingSession, setEditingSession] = useState<WorkoutSession | undefined>();
+    const [editingExercise, setEditingExercise] = useState<Exercise | undefined>();
 
     const todayDow = getCurrentDayOfWeek();
     const today = toDateString(new Date());
@@ -80,26 +84,56 @@ export default function SchedulePage() {
 
     // ─── Actions ────────────────────────────────────────────────────────────────
 
-    const handleSave = async (data: WorkoutSessionInsert) => {
-        if (editingSession) {
-            const updated = await updateWorkoutSession(editingSession.id, data);
-            setSessions((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+    const handleSaveExercise = async (exercise: Exercise) => {
+        const session = sessions.find((s) => s.day_of_week === selectedDay);
+        if (session) {
+            // Update session
+            const exists = session.exercises.find((e) => e.id === exercise.id);
+            const newExercises = exists
+                ? session.exercises.map((e) => (e.id === exercise.id ? exercise : e))
+                : [...session.exercises, exercise];
+            
+            const updated = await updateWorkoutSession(session.id, {
+                exercises: newExercises,
+                is_rest_day: false,
+            });
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
         } else {
-            const created = await createWorkoutSession(data);
+            // Create session
+            const created = await createWorkoutSession({
+                day_of_week: selectedDay,
+                week_number: activeWeek,
+                title: `Buổi tập ${DAY_FULL_LABELS[selectedDay]}`,
+                exercises: [exercise],
+                is_rest_day: false,
+            });
             setSessions((prev) => [...prev, created]);
         }
-        setEditingSession(undefined);
-        setShowModal(false);
     };
 
-    const handleDelete = async (id: string) => {
-        await deleteWorkoutSession(id);
-        setSessions((prev) => prev.filter((s) => s.id !== id));
+    const handleDeleteExercise = async (exerciseId: string) => {
+        const session = sessions.find((s) => s.day_of_week === selectedDay);
+        if (!session) return;
+        const newExercises = session.exercises.filter((e) => e.id !== exerciseId);
+        const updated = await updateWorkoutSession(session.id, { exercises: newExercises });
+        setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     };
 
-    const handleEdit = (session: WorkoutSession) => {
-        setEditingSession(session);
-        setShowModal(true);
+    const handleToggleRestDay = async () => {
+        const session = sessions.find((s) => s.day_of_week === selectedDay);
+        if (session) {
+            const updated = await updateWorkoutSession(session.id, { is_rest_day: !session.is_rest_day });
+            setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        } else {
+            const created = await createWorkoutSession({
+                day_of_week: selectedDay,
+                week_number: activeWeek,
+                title: "Nghỉ ngơi",
+                exercises: [],
+                is_rest_day: true,
+            });
+            setSessions((prev) => [...prev, created]);
+        }
     };
 
     const handleToggleWorkoutComplete = async () => {
@@ -129,15 +163,6 @@ export default function SchedulePage() {
     // ─── Derived ─────────────────────────────────────────────────────────────────
 
     const weekSessions = sessions.filter((s) => s.week_number === activeWeek);
-    const totalWeeks = sessions.length > 0
-        ? Math.max(...sessions.map((s) => s.week_number))
-        : 1;
-
-    // Sort by day of week (Mon first)
-    const orderedDays: DayOfWeek[] = [1, 2, 3, 4, 5, 6, 0];
-    const sortedSessions = [...weekSessions].sort(
-        (a, b) => orderedDays.indexOf(a.day_of_week) - orderedDays.indexOf(b.day_of_week)
-    );
 
     // Weekly stats
     const workoutDays = weekSessions.filter((s) => !s.is_rest_day).length;
@@ -184,13 +209,6 @@ export default function SchedulePage() {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
                     Lịch tập
                 </h1>
-                <button
-                    onClick={() => { setEditingSession(undefined); setShowModal(true); }}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-sm font-medium active:bg-indigo-500/30 transition-colors"
-                >
-                    <Plus className="w-4 h-4" />
-                    Thêm
-                </button>
             </header>
 
             {/* ── Today's workout completion banner ──────────────────────────────── */}
@@ -231,27 +249,6 @@ export default function SchedulePage() {
                 </div>
             )}
 
-            {/* Week navigator */}
-            <div className="flex items-center justify-between mb-4 p-3 rounded-2xl bg-white/5 border border-white/5">
-                <button
-                    onClick={() => setActiveWeek((w) => Math.max(1, w - 1))}
-                    disabled={activeWeek <= 1}
-                    className="p-2 rounded-xl bg-white/5 active:bg-white/15 transition-colors disabled:opacity-30"
-                >
-                    <ChevronLeft className="w-4 h-4 text-white/60" />
-                </button>
-                <div className="text-center">
-                    <p className="text-sm font-semibold text-white/90">Tuần {activeWeek}</p>
-                    <p className="text-xs text-white/30">{workoutDays} ngày tập</p>
-                </div>
-                <button
-                    onClick={() => setActiveWeek((w) => w + 1)}
-                    className="p-2 rounded-xl bg-white/5 active:bg-white/15 transition-colors"
-                >
-                    <ChevronRight className="w-4 h-4 text-white/60" />
-                </button>
-            </div>
-
             {/* Week stats */}
             {weekSessions.length > 0 && (
                 <div className="grid grid-cols-3 gap-3 mb-5">
@@ -272,50 +269,66 @@ export default function SchedulePage() {
                 </div>
             )}
 
+            {/* Day of Week Selector */}
+            <div className="mb-5">
+                <DaySelector selectedDay={selectedDay} onSelectDay={setSelectedDay} />
+            </div>
+
             {/* Session list */}
             {dataLoading ? (
                 <div className="flex items-center justify-center py-16">
                     <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
                 </div>
-            ) : sortedSessions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                    <CalendarDays className="w-12 h-12 text-white/10" />
-                    <p className="text-white/30 text-sm">Chưa có lịch tập cho tuần {activeWeek}</p>
-                    <button
-                        onClick={() => { setEditingSession(undefined); setShowModal(true); }}
-                        className="mt-2 px-5 py-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-sm font-medium active:bg-indigo-500/25 transition-colors"
-                    >
-                        Tạo buổi tập đầu tiên
-                    </button>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {sortedSessions.map((session) => {
-                        const isTodaySession = session.day_of_week === todayDow && session.week_number === activeWeek;
-                        return (
-                            <WorkoutCard
-                                key={session.id}
-                                session={session}
-                                isToday={isTodaySession}
-                                isCompleted={isTodaySession && workoutCompleted}
-                                isToggling={togglingWorkout}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                onToggleComplete={isTodaySession ? handleToggleWorkoutComplete : undefined}
-                            />
-                        );
-                    })}
-                </div>
-            )}
+            ) : (() => {
+                const session = sessions.find((s) => s.day_of_week === selectedDay);
+                if (!session) {
+                    return (
+                        <div className="flex flex-col items-center justify-center py-12 gap-3">
+                            <CalendarDays className="w-12 h-12 text-white/10" />
+                            <p className="text-white/30 text-sm text-center">
+                                Chưa có lịch tập cho ngày này.
+                            </p>
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    onClick={() => { setEditingExercise(undefined); setShowModal(true); }}
+                                    className="px-5 py-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-sm font-medium active:bg-indigo-500/25 transition-colors"
+                                >
+                                    Thêm bài tập
+                                </button>
+                                <button
+                                    onClick={handleToggleRestDay}
+                                    className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm font-medium active:bg-white/10 transition-colors"
+                                >
+                                    Đánh dấu ngày nghỉ
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                const isTodaySession = session.day_of_week === todayDow && session.week_number === activeWeek;
+                return (
+                    <WorkoutCard
+                        key={session.id}
+                        session={session}
+                        isToday={isTodaySession}
+                        isCompleted={isTodaySession && workoutCompleted}
+                        isToggling={togglingWorkout}
+                        onEditExercise={(ex) => { setEditingExercise(ex); setShowModal(true); }}
+                        onDeleteExercise={handleDeleteExercise}
+                        onAddExercise={() => { setEditingExercise(undefined); setShowModal(true); }}
+                        onToggleComplete={isTodaySession ? handleToggleWorkoutComplete : undefined}
+                        onToggleRestDay={handleToggleRestDay}
+                    />
+                );
+            })()}
 
             {/* Form modal */}
             {showModal && (
-                <WorkoutFormModal
-                    defaultDay={todayDow}
-                    defaultWeek={activeWeek}
-                    session={editingSession}
-                    onSave={handleSave}
-                    onClose={() => { setShowModal(false); setEditingSession(undefined); }}
+                <ExerciseFormModal
+                    exercise={editingExercise}
+                    onSave={handleSaveExercise}
+                    onClose={() => { setShowModal(false); setEditingExercise(undefined); }}
                 />
             )}
         </main>

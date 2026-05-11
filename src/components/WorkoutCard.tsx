@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Pencil, Trash2, Moon, Check } from "lucide-react";
+import { Pencil, Trash2, Moon, Check, Plus } from "lucide-react";
 import {
     WorkoutSession,
-    DAY_FULL_LABELS,
+    Exercise,
     CATEGORY_COLORS,
-    CATEGORY_LABELS,
     CATEGORY_ICONS,
 } from "@/types/schedule";
 
@@ -15,9 +14,11 @@ interface WorkoutCardProps {
     isToday: boolean;
     isCompleted?: boolean;
     isToggling?: boolean;
-    onEdit: (session: WorkoutSession) => void;
-    onDelete: (id: string) => void;
+    onEditExercise: (exercise: Exercise) => void;
+    onDeleteExercise: (exerciseId: string) => void;
+    onAddExercise: () => void;
     onToggleComplete?: () => void;
+    onToggleRestDay: () => void;
 }
 
 export default function WorkoutCard({
@@ -25,218 +26,146 @@ export default function WorkoutCard({
     isToday,
     isCompleted: completed = false,
     isToggling = false,
-    onEdit,
-    onDelete,
+    onEditExercise,
+    onDeleteExercise,
+    onAddExercise,
     onToggleComplete,
+    onToggleRestDay,
 }: WorkoutCardProps) {
-    const [expanded, setExpanded] = useState(isToday);
-    const [deleting, setDeleting] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    const totalSets = session.exercises.reduce((s, e) => s + e.sets.length, 0);
-    const categories = [...new Set(session.exercises.map((e) => e.category))];
-
-    const handleDelete = async () => {
-        setDeleting(true);
+    const handleDelete = async (id: string) => {
+        setDeletingId(id);
         try {
-            await onDelete(session.id);
+            await onDeleteExercise(id);
         } finally {
-            setDeleting(false);
+            setDeletingId(null);
         }
     };
 
     return (
-        <div
-            className={`rounded-3xl border transition-all duration-300 overflow-hidden ${
-                completed
-                    ? "border-emerald-500/30 bg-gradient-to-br from-emerald-500/8 to-teal-500/5"
-                    : isToday
-                        ? "border-indigo-500/40 bg-gradient-to-br from-indigo-500/10 to-purple-500/5"
-                        : "border-white/5 bg-white/3"
-            }`}
-        >
-            {/* Card header */}
-            <div
-                className="flex items-center p-4 cursor-pointer select-none active:bg-white/5 transition-colors"
-                onClick={() => setExpanded((v) => !v)}
-            >
-                {/* Day badge */}
-                <div
-                    className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center shrink-0 mr-4 ${
-                        completed
-                            ? "bg-emerald-500/30 border border-emerald-500/40"
-                            : isToday
-                                ? "bg-indigo-500/30 border border-indigo-500/40"
-                                : session.is_rest_day
-                                    ? "bg-white/5 border border-white/10"
-                                    : "bg-white/8 border border-white/10"
-                    }`}
-                >
-                    {completed ? (
-                        <Check className="w-5 h-5 text-emerald-400" />
-                    ) : (
-                        <>
-                            <span
-                                className={`text-xs font-bold ${isToday ? "text-indigo-300" : "text-white/50"}`}
-                            >
-                                {DAY_FULL_LABELS[session.day_of_week].slice(0, 2).toUpperCase()}
-                            </span>
-                            <span
-                                className={`text-[10px] ${isToday ? "text-indigo-400" : "text-white/30"}`}
-                            >
-                                T{session.week_number}
-                            </span>
-                        </>
-                    )}
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                        {isToday && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                                HÔM NAY
-                            </span>
-                        )}
-                        {completed && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                ✓ HOÀN THÀNH
-                            </span>
-                        )}
-                    </div>
-                    <h3 className={`text-sm font-semibold truncate ${completed ? "text-white/50 line-through" : "text-white/90"}`}>
-                        {session.is_rest_day ? "🛌 Nghỉ ngơi" : session.title}
-                    </h3>
-                    {!session.is_rest_day && (
-                        <p className="text-xs text-white/40 mt-0.5">
-                            {session.exercises.length} bài · {totalSets} set
-                        </p>
-                    )}
-                    {/* Category pills */}
-                    {!session.is_rest_day && categories.length > 0 && (
-                        <div className="flex gap-1 mt-1.5 flex-wrap">
-                            {categories.slice(0, 3).map((cat) => (
-                                <span
-                                    key={cat}
-                                    className="text-[10px] px-1.5 py-0.5 rounded-full"
-                                    style={{
-                                        backgroundColor: CATEGORY_COLORS[cat] + "22",
-                                        color: CATEGORY_COLORS[cat],
-                                        border: `1px solid ${CATEGORY_COLORS[cat]}33`,
-                                    }}
-                                >
-                                    {CATEGORY_ICONS[cat]} {CATEGORY_LABELS[cat]}
-                                </span>
-                            ))}
-                            {categories.length > 3 && (
-                                <span className="text-[10px] text-white/30">+{categories.length - 3}</span>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 ml-2">
-                    {/* Complete button (only for today, not rest day) */}
-                    {isToday && !session.is_rest_day && onToggleComplete && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onToggleComplete();
-                            }}
-                            disabled={isToggling}
-                            className={`p-2 rounded-xl transition-all ${
-                                completed
-                                    ? "bg-emerald-500/20 active:bg-emerald-500/30"
-                                    : "bg-white/5 active:bg-emerald-500/15"
-                            } ${isToggling ? "opacity-50" : ""}`}
-                        >
-                            <Check className={`w-4 h-4 ${completed ? "text-emerald-400" : "text-white/30"}`} />
-                        </button>
-                    )}
+        <div className="space-y-4">
+            {/* Header Actions for Today */}
+            {isToday && !session.is_rest_day && session.exercises.length > 0 && onToggleComplete && (
+                <div className="flex items-center justify-between px-2">
+                    <p className="text-sm font-semibold text-white/80">Bài tập hôm nay</p>
                     <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onEdit(session);
-                        }}
-                        className="p-2 rounded-xl bg-white/5 active:bg-white/15 transition-colors"
+                        onClick={onToggleComplete}
+                        disabled={isToggling}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                            completed
+                                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                                : "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 active:bg-indigo-500/30"
+                        } ${isToggling ? "opacity-50" : ""}`}
                     >
-                        <Pencil className="w-3.5 h-3.5 text-white/40" />
+                        <Check className="w-4 h-4" />
+                        {completed ? "Đã hoàn thành" : "Đánh dấu xong"}
                     </button>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete();
-                        }}
-                        disabled={deleting}
-                        className="p-2 rounded-xl bg-red-500/5 active:bg-red-500/15 transition-colors disabled:opacity-40"
-                    >
-                        <Trash2 className="w-3.5 h-3.5 text-red-400/60" />
-                    </button>
-                    <div className="ml-1 text-white/20">
-                        {expanded ? (
-                            <ChevronUp className="w-4 h-4" />
-                        ) : (
-                            <ChevronDown className="w-4 h-4" />
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Expanded exercise list */}
-            {expanded && !session.is_rest_day && session.exercises.length > 0 && (
-                <div className="px-4 pb-4 space-y-2">
-                    <div className="h-px bg-white/5 mb-3" />
-                    {session.exercises
-                        .sort((a, b) => a.order_index - b.order_index)
-                        .map((exercise) => (
-                            <div
-                                key={exercise.id}
-                                className="flex items-start gap-3 p-3 rounded-2xl bg-white/3 border border-white/5"
-                            >
-                                <div
-                                    className="w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 mt-0.5"
-                                    style={{ backgroundColor: CATEGORY_COLORS[exercise.category] + "20" }}
-                                >
-                                    {CATEGORY_ICONS[exercise.category]}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-white/90">{exercise.name}</p>
-                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                                        {exercise.sets.map((set) => (
-                                            <span
-                                                key={set.id}
-                                                className={`text-[11px] px-2 py-0.5 rounded-lg font-medium ${set.set_type === "warmup"
-                                                        ? "bg-yellow-500/10 text-yellow-400/70"
-                                                        : "bg-white/8 text-white/60"
-                                                    }`}
-                                            >
-                                                {set.weight ? `${set.weight}kg × ` : ""}
-                                                {set.reps
-                                                    ? `${set.reps} reps`
-                                                    : set.duration_sec
-                                                        ? `${set.duration_sec}s`
-                                                        : "AMRAP"}
-                                            </span>
-                                        ))}
-                                    </div>
-                                    {exercise.note && (
-                                        <p className="text-xs text-white/30 mt-1 italic">{exercise.note}</p>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    {session.note && (
-                        <p className="text-xs text-white/30 italic pt-1 px-1">{session.note}</p>
-                    )}
                 </div>
             )}
 
-            {expanded && session.is_rest_day && (
-                <div className="px-4 pb-4">
-                    <div className="h-px bg-white/5 mb-3" />
-                    <div className="flex items-center gap-2 text-white/30 py-2">
-                        <Moon className="w-4 h-4" />
-                        <p className="text-xs">Ngày nghỉ ngơi và phục hồi cơ thể</p>
+            {/* Exercises List or Rest Day */}
+            {session.is_rest_day ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-3 rounded-3xl bg-white/5 border border-white/5">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                        <Moon className="w-6 h-6 text-purple-400" />
+                    </div>
+                    <div className="text-center">
+                        <p className="text-sm font-semibold text-white/90">Ngày nghỉ ngơi</p>
+                        <p className="text-xs text-white/40 mt-1 mb-4">Dành thời gian để phục hồi cơ thể</p>
+                        <button
+                            onClick={onToggleRestDay}
+                            className="px-4 py-2 rounded-xl bg-white/5 text-white/60 text-xs font-medium hover:bg-white/10 active:bg-white/15 transition-colors"
+                        >
+                            Huỷ ngày nghỉ
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {session.exercises.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 gap-3 rounded-3xl bg-white/5 border border-white/5">
+                            <p className="text-sm text-white/40">Chưa có bài tập nào</p>
+                        </div>
+                    ) : (
+                        session.exercises
+                            .sort((a, b) => a.order_index - b.order_index)
+                            .map((exercise) => (
+                                <div
+                                    key={exercise.id}
+                                    className="flex flex-col gap-3 p-4 rounded-3xl bg-white/5 border border-white/5"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                                            {exercise.image_url ? (
+                                                <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 border border-white/10">
+                                                    <img src={exercise.image_url} alt={exercise.name} className="w-full h-full object-cover" />
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl shrink-0"
+                                                    style={{ backgroundColor: CATEGORY_COLORS[exercise.category] + "20" }}
+                                                >
+                                                    {CATEGORY_ICONS[exercise.category]}
+                                                </div>
+                                            )}
+                                            <div className="flex-1 min-w-0 pt-0.5">
+                                                <p className="text-base font-semibold text-white/90 leading-tight">{exercise.name}</p>
+                                                {exercise.description && (
+                                                    <p className="text-xs text-white/40 mt-1 leading-relaxed line-clamp-2">{exercise.description}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* Action buttons for exercise */}
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                onClick={() => onEditExercise(exercise)}
+                                                className="p-2 rounded-xl bg-white/5 text-white/60 hover:bg-white/10 active:bg-white/15 transition-colors"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(exercise.id)}
+                                                disabled={deletingId === exercise.id}
+                                                className="p-2 rounded-xl bg-red-500/10 text-red-400/80 hover:bg-red-500/20 active:bg-red-500/30 transition-colors disabled:opacity-40"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white/5 rounded-2xl p-3">
+                                        <div className="flex flex-col gap-1.5">
+                                            {exercise.sets.map((set, idx) => (
+                                                <div key={set.id} className="flex items-center gap-3 px-2">
+                                                    <span className="text-xs font-medium text-white/30 w-4">{idx + 1}</span>
+                                                    <div className="flex-1 flex gap-4">
+                                                        {set.duration_sec ? (
+                                                            <span className="text-sm font-medium text-white/80">{set.duration_sec} giây</span>
+                                                        ) : (
+                                                            <>
+                                                                <span className="text-sm font-medium text-white/80">{set.weight ? `${set.weight} kg` : "- kg"}</span>
+                                                                <span className="text-sm font-medium text-white/60">×</span>
+                                                                <span className="text-sm font-medium text-white/80">{set.reps ? `${set.reps} reps` : "AMRAP"}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                    )}
+
+                    <div className="pt-2">
+                        <button
+                            onClick={onAddExercise}
+                            className="w-full py-4 rounded-2xl border border-dashed border-white/20 text-white/60 hover:bg-white/5 hover:border-white/30 hover:text-white/80 transition-all flex items-center justify-center gap-2 font-medium text-sm"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Thêm bài tập
+                        </button>
                     </div>
                 </div>
             )}

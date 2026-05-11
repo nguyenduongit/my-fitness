@@ -19,6 +19,7 @@ import { DailyCompletion, isCompleted } from "@/types/completion";
 import { DayOfWeek, DAY_LABELS, DAY_FULL_LABELS } from "@/types/schedule";
 import AddFoodModal from "@/components/AddFoodModal";
 import MacroRing from "@/components/MacroRing";
+import DaySelector from "@/components/DaySelector";
 import { User } from "@supabase/supabase-js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -192,35 +193,7 @@ export default function MenuPage() {
 
             {/* ── Day of Week Selector ──────────────────────────────────────────── */}
             <div className="mb-5">
-                <div className="flex items-center justify-between bg-white/5 p-2 rounded-2xl border border-white/5">
-                    {ORDERED_DAYS.map((dow) => {
-                        const isSelected = dow === selectedDay;
-                        const isDayToday = dow === todayDow;
-
-                        return (
-                            <button
-                                key={dow}
-                                onClick={() => setSelectedDay(dow)}
-                                className={`relative flex flex-col items-center justify-center w-[13%] py-2.5 rounded-xl transition-all ${
-                                    isSelected
-                                        ? "bg-indigo-500 shadow-lg shadow-indigo-500/25 scale-105"
-                                        : "active:bg-white/10"
-                                }`}
-                            >
-                                <span
-                                    className={`text-sm font-bold ${
-                                        isSelected ? "text-white" : isDayToday ? "text-indigo-400" : "text-white/70"
-                                    }`}
-                                >
-                                    {DAY_LABELS[dow]}
-                                </span>
-                                {isDayToday && !isSelected && (
-                                    <div className="w-1 h-1 rounded-full bg-indigo-400 absolute bottom-1" />
-                                )}
-                            </button>
-                        );
-                    })}
-                </div>
+                <DaySelector selectedDay={selectedDay} onSelectDay={setSelectedDay} />
             </div>
 
             {/* ── Today's completion progress (only show for today) ────────────── */}

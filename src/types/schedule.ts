@@ -27,6 +27,8 @@ export interface Exercise {
     id: string;
     workout_id: string;
     name: string;
+    description?: string;
+    image_url?: string;
     category: ExerciseCategory;
     sets: ExerciseSet[];
     note?: string;
