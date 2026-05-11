@@ -204,75 +204,11 @@ export default function SchedulePage() {
             className="p-5 min-h-full"
             style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top, 0px))" }}
         >
-            {/* Header */}
-            <header className="flex items-center justify-between mb-5">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
-                    Lịch tập
-                </h1>
-            </header>
-
-            {/* ── Today's workout completion banner ──────────────────────────────── */}
-            {todaySession && activeWeek === 1 && (
-                <div className={`mb-4 p-3.5 rounded-2xl border transition-all ${
-                    workoutCompleted
-                        ? "bg-gradient-to-r from-emerald-500/12 to-teal-500/8 border-emerald-500/15"
-                        : "bg-gradient-to-r from-violet-500/12 to-indigo-500/8 border-violet-500/15"
-                }`}>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                workoutCompleted ? "bg-emerald-500/20" : "bg-violet-500/20"
-                            }`}>
-                                <Check className={`w-4 h-4 ${
-                                    workoutCompleted ? "text-emerald-400" : "text-violet-400"
-                                }`} />
-                            </div>
-                            <div>
-                                <p className="text-xs text-white/50">Buổi tập hôm nay</p>
-                                <p className="text-sm font-semibold text-white/90">
-                                    {workoutCompleted ? "✓ Đã hoàn thành" : todaySession.title}
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={handleToggleWorkoutComplete}
-                            disabled={togglingWorkout}
-                            className={`px-3.5 py-2 rounded-xl text-xs font-medium transition-all ${
-                                workoutCompleted
-                                    ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400"
-                                    : "bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 active:bg-indigo-500/30"
-                            } ${togglingWorkout ? "opacity-50" : ""}`}
-                        >
-                            {workoutCompleted ? "Hoàn thành ✓" : "Đánh dấu xong"}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Week stats */}
-            {weekSessions.length > 0 && (
-                <div className="grid grid-cols-3 gap-3 mb-5">
-                    {[
-                        { label: "Ngày tập", value: workoutDays, unit: "ngày", color: "from-indigo-500/20 to-indigo-500/5" },
-                        { label: "Bài tập", value: totalExercises, unit: "bài", color: "from-cyan-500/20 to-cyan-500/5" },
-                        { label: "Tổng set", value: totalSets, unit: "set", color: "from-emerald-500/20 to-emerald-500/5" },
-                    ].map((stat) => (
-                        <div
-                            key={stat.label}
-                            className={`p-3 rounded-2xl bg-gradient-to-br ${stat.color} border border-white/5 text-center`}
-                        >
-                            <p className="text-xl font-bold text-white">{stat.value}</p>
-                            <p className="text-[10px] text-white/40 mt-0.5">{stat.unit}</p>
-                            <p className="text-[10px] text-white/30">{stat.label}</p>
-                        </div>
-                    ))}
-                </div>
-            )}
-
             {/* Day of Week Selector */}
             <div className="mb-5">
                 <DaySelector selectedDay={selectedDay} onSelectDay={setSelectedDay} />
             </div>
+
 
             {/* Session list */}
             {dataLoading ? (
@@ -294,12 +230,6 @@ export default function SchedulePage() {
                                     className="px-5 py-2.5 rounded-xl bg-indigo-500/15 border border-indigo-500/25 text-indigo-400 text-sm font-medium active:bg-indigo-500/25 transition-colors"
                                 >
                                     Thêm bài tập
-                                </button>
-                                <button
-                                    onClick={handleToggleRestDay}
-                                    className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm font-medium active:bg-white/10 transition-colors"
-                                >
-                                    Đánh dấu ngày nghỉ
                                 </button>
                             </div>
                         </div>

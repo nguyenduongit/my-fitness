@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Clock, Bell, Timer, Save } from "lucide-react";
+import { Clock, Bell, Timer, Save, CalendarDays, ChevronRight } from "lucide-react";
 import NotificationPermission from "@/components/NotificationPermission";
+import ScheduleSettingsModal from "@/components/ScheduleSettingsModal";
 import { supabase } from "@/lib/supabase";
 import {
     getNotificationSettings,
@@ -28,6 +29,7 @@ export default function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [saveMessage, setSaveMessage] = useState("");
     const [hasChanges, setHasChanges] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -119,6 +121,23 @@ export default function SettingsPage() {
             </h1>
 
             <div className="space-y-4">
+                {/* ── Schedule Settings ──────────────────────────────────────────────── */}
+                {user && (
+                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                        <div className="flex items-center gap-2 mb-4">
+                            <CalendarDays className="w-4 h-4 text-emerald-400" />
+                            <h3 className="font-semibold text-base text-white/90">Lịch tập luyện</h3>
+                        </div>
+                        <button
+                            onClick={() => setShowScheduleModal(true)}
+                            className="w-full flex items-center justify-between p-3.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 transition-colors"
+                        >
+                            <span className="text-sm text-white/80 font-medium">Tuỳ chỉnh ngày tập / ngày nghỉ</span>
+                            <ChevronRight className="w-4 h-4 text-white/40" />
+                        </button>
+                    </div>
+                )}
+
                 {/* ── Notification Permission ───────────────────────────────────────── */}
                 <div className="p-4 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
                     <div className="flex items-center gap-2 mb-4">
@@ -306,6 +325,10 @@ export default function SettingsPage() {
                     )}
                 </div>
             </div>
+
+            {showScheduleModal && (
+                <ScheduleSettingsModal onClose={() => setShowScheduleModal(false)} />
+            )}
         </main>
     );
 }

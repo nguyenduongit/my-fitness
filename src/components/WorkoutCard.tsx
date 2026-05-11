@@ -64,30 +64,13 @@ export default function WorkoutCard({
                 </div>
             )}
 
-            {/* Exercises List or Rest Day */}
-            {session.is_rest_day ? (
-                <div className="flex flex-col items-center justify-center py-10 gap-3 rounded-3xl bg-white/5 border border-white/5">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
-                        <Moon className="w-6 h-6 text-purple-400" />
+            {/* Exercises List */}
+            <div className="space-y-3">
+                {session.exercises.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 gap-3 rounded-3xl bg-white/5 border border-white/5">
+                        <p className="text-sm text-white/40">Chưa có bài tập nào</p>
                     </div>
-                    <div className="text-center">
-                        <p className="text-sm font-semibold text-white/90">Ngày nghỉ ngơi</p>
-                        <p className="text-xs text-white/40 mt-1 mb-4">Dành thời gian để phục hồi cơ thể</p>
-                        <button
-                            onClick={onToggleRestDay}
-                            className="px-4 py-2 rounded-xl bg-white/5 text-white/60 text-xs font-medium hover:bg-white/10 active:bg-white/15 transition-colors"
-                        >
-                            Huỷ ngày nghỉ
-                        </button>
-                    </div>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    {session.exercises.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 gap-3 rounded-3xl bg-white/5 border border-white/5">
-                            <p className="text-sm text-white/40">Chưa có bài tập nào</p>
-                        </div>
-                    ) : (
+                ) : (
                         session.exercises
                             .sort((a, b) => a.order_index - b.order_index)
                             .map((exercise) => (
@@ -168,7 +151,6 @@ export default function WorkoutCard({
                         </button>
                     </div>
                 </div>
-            )}
         </div>
     );
 }

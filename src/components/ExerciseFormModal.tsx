@@ -96,10 +96,10 @@ export default function ExerciseFormModal({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center pb-[85px]">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-            <div className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl border border-white/10 max-h-[92vh] flex flex-col">
+            <div className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl border border-white/10 max-h-[85vh] flex flex-col shadow-2xl">
                 {/* Handle */}
                 <div className="flex justify-center pt-3 pb-1 shrink-0">
                     <div className="w-10 h-1 rounded-full bg-white/20" />
