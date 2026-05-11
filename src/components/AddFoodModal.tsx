@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Search, Plus } from "lucide-react";
+import { X, Search, Plus, ChevronUp } from "lucide-react";
 import {
     MealType,
     MealPlanItemInsert,
@@ -28,6 +28,11 @@ export default function AddFoodModal({
     const [selectedMeal, setSelectedMeal] = useState<MealType>(defaultMealType);
     const [loading, setLoading] = useState(false);
     const [showCustomForm, setShowCustomForm] = useState(false);
+    
+    // For expandable suggestion
+    const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
+    const [inputQuantity, setInputQuantity] = useState<string>("");
+
     const [form, setForm] = useState({
         name: "",
         calories: "",
@@ -42,18 +47,19 @@ export default function AddFoodModal({
         f.name.toLowerCase().includes(search.toLowerCase())
     );
 
-    const handleSelectSuggestion = async (suggestion: typeof FOOD_SUGGESTIONS[0]) => {
+    const handleSelectSuggestion = async (suggestion: typeof FOOD_SUGGESTIONS[0], actualQuantity: number) => {
         setLoading(true);
         try {
+            const ratio = actualQuantity / suggestion.quantity;
             await onAdd({
                 meal_type: selectedMeal,
                 day_of_week: dayOfWeek,
                 name: suggestion.name,
-                calories: suggestion.calories,
-                protein: suggestion.protein,
-                carbs: suggestion.carbs,
-                fat: suggestion.fat,
-                quantity: suggestion.quantity,
+                calories: Math.round(suggestion.calories * ratio),
+                protein: Number((suggestion.protein * ratio).toFixed(1)),
+                carbs: Number((suggestion.carbs * ratio).toFixed(1)),
+                fat: Number((suggestion.fat * ratio).toFixed(1)),
+                quantity: actualQuantity,
                 unit: suggestion.unit,
                 order_index: 0,
             });
@@ -170,25 +176,84 @@ export default function AddFoodModal({
 
                             {/* Suggestions list */}
                             <div className="space-y-2">
-                                {filtered.map((item) => (
-                                    <button
-                                        key={item.name}
-                                        onClick={() => handleSelectSuggestion(item)}
-                                        disabled={loading}
-                                        className="w-full flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 active:bg-white/15 transition-colors text-left"
-                                    >
-                                        <div>
-                                            <p className="text-sm font-medium text-white/90">{item.name}</p>
-                                            <p className="text-xs text-white/40 mt-0.5">
-                                                {item.quantity} {item.unit} · P:{item.protein}g C:{item.carbs}g F:{item.fat}g
-                                            </p>
+                                {filtered.map((item) => {
+                                    const isExpanded = selectedFoodId === item.name;
+                                    const baseQuantity = item.quantity;
+                                    
+                                    const currentQty = isExpanded ? (Number(inputQuantity) || 0) : baseQuantity;
+                                    const ratio = currentQty / baseQuantity;
+                                    
+                                    const displayCals = Math.round(item.calories * ratio);
+                                    const displayP = (item.protein * ratio).toFixed(1);
+                                    const displayC = (item.carbs * ratio).toFixed(1);
+                                    const displayF = (item.fat * ratio).toFixed(1);
+
+                                    return (
+                                        <div key={item.name} className={`bg-white/5 border rounded-2xl overflow-hidden transition-all ${isExpanded ? 'border-indigo-500/50' : 'border-white/5 hover:bg-white/10'}`}>
+                                            <button
+                                                onClick={() => {
+                                                    if (isExpanded) {
+                                                        setSelectedFoodId(null);
+                                                    } else {
+                                                        setSelectedFoodId(item.name);
+                                                        setInputQuantity(String(item.quantity));
+                                                    }
+                                                }}
+                                                className="w-full flex items-center justify-between p-3 text-left active:bg-white/5"
+                                            >
+                                                <div>
+                                                    <p className="text-sm font-medium text-white/90">{item.name}</p>
+                                                    <p className="text-xs text-white/40 mt-0.5">
+                                                        {baseQuantity} {item.unit} · P:{item.protein}g C:{item.carbs}g F:{item.fat}g
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm font-bold text-amber-400">{item.calories} kcal</span>
+                                                    {isExpanded ? (
+                                                        <ChevronUp className="w-5 h-5 text-indigo-400" />
+                                                    ) : (
+                                                        <Plus className="w-5 h-5 text-white/40" />
+                                                    )}
+                                                </div>
+                                            </button>
+                                            
+                                            {isExpanded && (
+                                                <div className="px-3 pb-3 pt-1 border-t border-white/5">
+                                                    <div className="flex items-end gap-3">
+                                                        <div className="flex-1">
+                                                            <label className="text-xs text-white/50 mb-1.5 block">
+                                                                Nhập số lượng ({item.unit})
+                                                            </label>
+                                                            <input
+                                                                type="number"
+                                                                value={inputQuantity}
+                                                                onChange={(e) => setInputQuantity(e.target.value)}
+                                                                className="w-full px-3 py-2 bg-black/20 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500/50"
+                                                                autoFocus
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleSelectSuggestion(item, currentQty)}
+                                                            disabled={loading || !currentQty || currentQty <= 0}
+                                                            className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                                                        >
+                                                            Thêm
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    <div className="flex justify-between items-center mt-3 px-1 text-xs text-white/60">
+                                                        <span>Thực tế: <span className="text-amber-400 font-bold ml-1">{displayCals} kcal</span></span>
+                                                        <div className="flex gap-3">
+                                                            <span>P: <span className="text-white font-medium">{displayP}g</span></span>
+                                                            <span>C: <span className="text-white font-medium">{displayC}g</span></span>
+                                                            <span>F: <span className="text-white font-medium">{displayF}g</span></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-amber-400">{item.calories} kcal</span>
-                                            <Plus className="w-4 h-4 text-indigo-400" />
-                                        </div>
-                                    </button>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </>
                     ) : (
