@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { X, Search, ChevronDown } from "lucide-react";
+import { X, Search, ChevronDown, ImageIcon } from "lucide-react";
 import { getFoodLibrary } from "@/lib/food-library";
 import { FoodLibraryItem } from "@/types/food-library";
 
@@ -11,6 +11,7 @@ interface SelectedFood {
     protein: number;
     carbs: number;
     fat: number;
+    thumbnailBase64: string | null;
     unit: string;
     baseQuantity: number;
 }
@@ -27,6 +28,7 @@ interface AddFoodModalProps {
         protein: number;
         carbs: number;
         fat: number;
+        thumbnail_base64: string | null;
     }) => void;
     // Dùng cho sửa
     onUpdate?: (
@@ -39,6 +41,7 @@ interface AddFoodModalProps {
             protein: number;
             carbs: number;
             fat: number;
+            thumbnail_base64: string | null;
         }
     ) => Promise<void>;
     initialItem?: {
@@ -50,8 +53,20 @@ interface AddFoodModalProps {
         protein: number;
         carbs: number;
         fat: number;
+        thumbnail_base64: string | null;
         meal_type: string;
     };
+}
+
+function getErrorMessage(error: unknown) {
+    if (error instanceof Error) return error.message;
+
+    if (error && typeof error === "object" && "message" in error) {
+        const message = (error as { message?: unknown }).message;
+        if (typeof message === "string") return message;
+    }
+
+    return "Không thể tải thư viện thực phẩm. Vui lòng thử lại.";
 }
 
 export default function AddFoodModal({
@@ -64,6 +79,7 @@ export default function AddFoodModal({
     const [foodLibrary, setFoodLibrary] = useState<FoodLibraryItem[]>([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState("");
     const [showPicker, setShowPicker] = useState(true);
     const [selectedFood, setSelectedFood] = useState<SelectedFood | null>(null);
     const [quantity, setQuantity] = useState("100");
@@ -74,58 +90,74 @@ export default function AddFoodModal({
     // Tải thư viện thực phẩm từ Supabase
     const loadLibrary = useCallback(async () => {
         setLoading(true);
+        setLoadError("");
         try {
             const data = await getFoodLibrary();
             setFoodLibrary(data);
+            return data;
         } catch (error) {
             console.error("Không thể tải thư viện thực phẩm:", error);
+            setFoodLibrary([]);
+            setLoadError(getErrorMessage(error));
+            return [];
         } finally {
             setLoading(false);
         }
     }, []);
 
-    useEffect(() => {
-        if (isOpen) {
-            loadLibrary();
-            if (isEditing && initialItem) {
-                // Khi sửa: tự động set selectedFood và vào thẳng màn hình nhập số lượng
-                // Tìm item trong thư viện hoặc tạo selectedFood từ initialItem
-                const found = foodLibrary.find((f) => f.name === initialItem.name);
-                const base = found
-                    ? {
-                        id: found.id,
-                        name: found.name,
-                        baseCalories: found.calories,
-                        protein: found.protein,
-                        carbs: found.carbs,
-                        fat: found.fat,
-                        unit: found.unit,
-                        baseQuantity: found.quantity || 100,
-                    }
-                    : {
-                        id: initialItem.id,
-                        name: initialItem.name,
-                        baseCalories: initialItem.calories,
-                        protein: initialItem.protein,
-                        carbs: initialItem.carbs,
-                        fat: initialItem.fat,
-                        unit: initialItem.unit,
-                        baseQuantity: 100, // fallback
-                    };
-                setSelectedFood(base);
-                setQuantity(String(initialItem.quantity));
-                setUnit(initialItem.unit);
-                setShowPicker(false);
-            } else {
-                // Reset về trạng thái thêm mới
-                setSearch("");
-                setShowPicker(true);
-                setSelectedFood(null);
-                setQuantity("100");
-                setUnit("g");
-            }
+    const initializeModal = useCallback(async () => {
+        const library = await loadLibrary();
+
+        if (isEditing && initialItem) {
+            // Khi sửa: tự động set selectedFood và vào thẳng màn hình nhập số lượng
+            // Tìm item trong thư viện hoặc tạo selectedFood từ initialItem
+            const found = library.find((f) => f.name === initialItem.name);
+            const base = found
+                ? {
+                    id: found.id,
+                    name: found.name,
+                    baseCalories: found.calories,
+                    protein: found.protein,
+                    carbs: found.carbs,
+                    fat: found.fat,
+                    thumbnailBase64: found.thumbnail_base64,
+                    unit: found.unit,
+                    baseQuantity: found.quantity || 100,
+                }
+                : {
+                    id: initialItem.id,
+                    name: initialItem.name,
+                    baseCalories: initialItem.calories,
+                    protein: initialItem.protein,
+                    carbs: initialItem.carbs,
+                    fat: initialItem.fat,
+                    thumbnailBase64: initialItem.thumbnail_base64,
+                    unit: initialItem.unit,
+                    baseQuantity: 100, // fallback
+                };
+            setSelectedFood(base);
+            setQuantity(String(initialItem.quantity));
+            setUnit(initialItem.unit);
+            setShowPicker(false);
+        } else {
+            // Reset về trạng thái thêm mới
+            setSearch("");
+            setShowPicker(true);
+            setSelectedFood(null);
+            setQuantity("100");
+            setUnit("g");
         }
-    }, [isOpen, isEditing, initialItem, loadLibrary]);
+    }, [initialItem, isEditing, loadLibrary]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const timeoutId = window.setTimeout(() => {
+            void initializeModal();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [isOpen, initializeModal]);
 
     // Lọc danh sách theo từ khóa
     const filtered = foodLibrary.filter((item) =>
@@ -152,6 +184,7 @@ export default function AddFoodModal({
             protein: item.protein,
             carbs: item.carbs,
             fat: item.fat,
+            thumbnailBase64: item.thumbnail_base64,
             unit: item.unit,
             baseQuantity: item.quantity || 100,
         });
@@ -173,6 +206,7 @@ export default function AddFoodModal({
                 name: selectedFood.name, // có thể giữ nguyên tên cũ
                 quantity: qty,
                 unit,
+                thumbnail_base64: selectedFood.thumbnailBase64,
                 ...macros,
             });
         } else if (!isEditing && onAdd) {
@@ -180,6 +214,7 @@ export default function AddFoodModal({
                 name: selectedFood.name,
                 quantity: qty,
                 unit,
+                thumbnail_base64: selectedFood.thumbnailBase64,
                 ...macros,
             });
         }
@@ -189,8 +224,14 @@ export default function AddFoodModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm">
-            <div className="w-full max-w-md bg-zinc-900 rounded-t-3xl p-6 animate-slide-up max-h-[85vh] flex flex-col">
+        <div
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+            style={{
+                paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))",
+                paddingTop: "env(safe-area-inset-top, 0px)",
+            }}
+        >
+            <div className="w-full max-w-md bg-zinc-900 rounded-t-3xl p-6 animate-slide-up max-h-[calc(100dvh-7rem)] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-bold text-white">
@@ -228,6 +269,16 @@ export default function AddFoodModal({
                         <div className="flex-1 overflow-y-auto -mx-2 px-2">
                             {loading ? (
                                 <p className="text-center text-white/50 py-8">Đang tải...</p>
+                            ) : loadError ? (
+                                <div className="py-8 text-center">
+                                    <p className="text-sm text-red-200">{loadError}</p>
+                                    <button
+                                        onClick={loadLibrary}
+                                        className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15 active:bg-white/20"
+                                    >
+                                        Thử lại
+                                    </button>
+                                </div>
                             ) : filtered.length === 0 ? (
                                 <div className="text-center text-white/50 py-8">
                                     {search.trim()
@@ -240,13 +291,28 @@ export default function AddFoodModal({
                                         <button
                                             key={item.id}
                                             onClick={() => handleSelectFood(item)}
-                                            className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+                                            className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 transition-colors text-left"
                                         >
-                                            <div>
-                                                <div className="text-white font-medium">{item.name}</div>
-                                                <div className="text-xs text-white/40">
-                                                    {item.calories} kcal • P: {item.protein}g • C:{" "}
-                                                    {item.carbs}g • F: {item.fat}g
+                                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                                                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                                                    {item.thumbnail_base64 ? (
+                                                        <img
+                                                            src={item.thumbnail_base64}
+                                                            alt={item.name}
+                                                            className="h-full w-full object-cover"
+                                                        />
+                                                    ) : (
+                                                        <div className="flex h-full w-full items-center justify-center text-white/30">
+                                                            <ImageIcon size={18} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="truncate text-white font-medium">{item.name}</div>
+                                                    <div className="text-xs text-white/40">
+                                                        {item.calories} kcal • P: {item.protein}g • C:{" "}
+                                                        {item.carbs}g • F: {item.fat}g
+                                                    </div>
                                                 </div>
                                             </div>
                                             <ChevronDown
@@ -263,14 +329,29 @@ export default function AddFoodModal({
                     /* Giao diện nhập số lượng sau khi đã chọn thực phẩm (cả thêm và sửa) */
                     <div className="flex-1 flex flex-col">
                         {/* Tên thực phẩm đã chọn */}
-                        <div className="mb-4 p-3 bg-white/5 rounded-xl flex items-center justify-between">
-                            <div>
-                                <div className="text-white font-medium">
-                                    {selectedFood?.name}
+                        <div className="mb-4 p-3 bg-white/5 rounded-xl flex items-center justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                                    {selectedFood?.thumbnailBase64 ? (
+                                        <img
+                                            src={selectedFood.thumbnailBase64}
+                                            alt={selectedFood.name}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center text-white/30">
+                                            <ImageIcon size={20} />
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="text-xs text-white/40">
-                                    Mỗi {selectedFood?.baseQuantity}
-                                    {selectedFood?.unit}: {selectedFood?.baseCalories} kcal
+                                <div className="min-w-0">
+                                    <div className="truncate text-white font-medium">
+                                        {selectedFood?.name}
+                                    </div>
+                                    <div className="text-xs text-white/40">
+                                        Mỗi {selectedFood?.baseQuantity}
+                                        {selectedFood?.unit}: {selectedFood?.baseCalories} kcal
+                                    </div>
                                 </div>
                             </div>
                             {/* Khi sửa, không cho phép đổi món (có thể bỏ nếu muốn) */}

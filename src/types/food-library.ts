@@ -6,6 +6,7 @@ export interface FoodLibraryItem {
     protein: number;
     carbs: number;
     fat: number;
+    thumbnail_base64: string | null;
     unit: string;
     quantity: number;
     calcium: number;

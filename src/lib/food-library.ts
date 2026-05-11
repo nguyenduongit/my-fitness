@@ -3,10 +3,15 @@ import { FoodLibraryItem, FoodLibraryItemInsert } from "@/types/food-library";
 
 // Lấy danh sách thực phẩm của user
 export async function getFoodLibrary(): Promise<FoodLibraryItem[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Chưa đăng nhập");
+
     const { data, error } = await supabase
         .from("food_library")
         .select("*")
+        .eq("user_id", user.id)
         .order("name");
+
     if (error) throw error;
     return data ?? [];
 }

@@ -162,6 +162,7 @@ export default function MenuPage() {
         protein: number;
         carbs: number;
         fat: number;
+        thumbnail_base64: string | null;
     }) => {
         const mealType = activeModal!; // activeModal luôn có giá trị khi gọi hàm này
         const mealItems = items.filter((i) => i.meal_type === mealType);
@@ -293,6 +294,7 @@ export default function MenuPage() {
                                 protein: editingItem.protein,
                                 carbs: editingItem.carbs,
                                 fat: editingItem.fat,
+                                thumbnail_base64: editingItem.thumbnail_base64,
                                 meal_type: editingItem.meal_type,
                             }
                             : undefined

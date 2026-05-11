@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Plus, Trash2, Check, Edit, Edit2 } from "lucide-react";
+import { Plus, Trash2, Check, Edit2, ImageIcon } from "lucide-react";
 import {
     MealPlanItem,
     MealType,
@@ -82,9 +82,6 @@ function SwipeableFoodItem({
 
     const isDeleting = deletingId === item.id;
 
-    // Use a generic placeholder image for the food
-    const imageUrl = `https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80`;
-
     return (
         <div className="relative overflow-hidden border-t border-white/5 first:border-t-0 bg-[#1C1C1E]">
             {/* Background Actions (Edit & Delete) */}
@@ -122,11 +119,17 @@ function SwipeableFoodItem({
             >
                 {/* Square Image */}
                 <div className="w-14 h-14 rounded-xl shrink-0 overflow-hidden mr-3.5 bg-white/5">
-                    <img 
-                        src={imageUrl} 
-                        alt={item.name} 
-                        className={`w-full h-full object-cover ${isCompleted ? 'grayscale opacity-60' : ''}`} 
-                    />
+                    {item.thumbnail_base64 ? (
+                        <img
+                            src={item.thumbnail_base64}
+                            alt={item.name}
+                            className={`w-full h-full object-cover ${isCompleted ? 'grayscale opacity-60' : ''}`}
+                        />
+                    ) : (
+                        <div className={`flex h-full w-full items-center justify-center text-white/30 ${isCompleted ? 'opacity-50' : ''}`}>
+                            <ImageIcon className="h-5 w-5" />
+                        </div>
+                    )}
                 </div>
                 
                 {/* Content */}
@@ -258,4 +261,3 @@ export default function MealBlock({
         </section>
     );
 }
-

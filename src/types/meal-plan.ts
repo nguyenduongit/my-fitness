@@ -15,6 +15,7 @@ export interface MealPlanItem {
     protein: number;
     carbs: number;
     fat: number;
+    thumbnail_base64: string | null;
     quantity: number;
     unit: string;
     order_index: number;
