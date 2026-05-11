@@ -159,25 +159,6 @@ export default function AddFoodModal({
                     </button>
                 </div>
 
-                {/* Meal type selector */}
-                <div className="px-5 pb-3 shrink-0">
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                        {(["breakfast", "lunch", "dinner", "snack"] as MealType[]).map((m) => (
-                            <button
-                                key={m}
-                                onClick={() => setSelectedMeal(m)}
-                                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl whitespace-nowrap text-sm font-medium transition-colors ${selectedMeal === m
-                                        ? "bg-indigo-500/30 border border-indigo-500/50 text-indigo-300"
-                                        : "bg-white/5 border border-white/10 text-white/50"
-                                    }`}
-                            >
-                                <span>{MEAL_ICONS[m]}</span>
-                                {MEAL_LABELS[m]}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
                 {/* Toggle custom / search - Hide if editing */}
                 {!isEditing && (
                     <div className="px-5 pb-3 flex gap-2 shrink-0">
