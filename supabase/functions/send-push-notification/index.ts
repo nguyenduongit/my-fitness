@@ -15,7 +15,17 @@ const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY') || ''
 const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY') || ''
 const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:nguyenduongit89@gmail.com'
 
-webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
+let isVapidConfigured = false;
+if (vapidPublicKey && vapidPrivateKey) {
+  try {
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey)
+    isVapidConfigured = true;
+  } catch (err) {
+    console.error('❌ Failed to set VAPID details:', err.message)
+  }
+} else {
+  console.warn('⚠️ VAPID keys are not configured. Push notifications will fail.')
+}
 
 // ─── Supabase admin client (service_role) ────────────────────────────────────
 const supabaseAdmin = createClient(
@@ -96,12 +106,17 @@ interface PushResult {
   sent: number
   failed: number
   cleaned: number
+  error?: string
 }
 
 async function sendPushToUser(
   userId: string,
   payload: { title: string; body: string; icon?: string; url?: string }
 ): Promise<PushResult> {
+  if (!isVapidConfigured) {
+    return { userId, sent: 0, failed: 0, cleaned: 0, error: 'VAPID keys not configured' }
+  }
+
   const { data: subs, error } = await supabaseAdmin
     .from('push_subscriptions')
     .select('endpoint, p256dh, auth')
@@ -204,6 +219,17 @@ Deno.serve(async (req) => {
 
     console.log(`📬 Action: ${action}`)
 
+    if (!isVapidConfigured) {
+      console.error('❌ VAPID keys not configured. Please set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Supabase secrets.')
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'VAPID keys not configured. Please set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in Supabase secrets.' 
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     // ─── Action: cron-check-reminders ──────────────────────────────────
     // Gọi bởi pg_cron mỗi phút → check giờ hiện tại → gửi push cho users
     if (action === 'cron-check-reminders') {
@@ -253,7 +279,6 @@ Deno.serve(async (req) => {
         const template = REMINDER_TEMPLATES.water_reminder
 
         for (const userId of uniqueUserIds) {
-          const dedupeKey = `water_${currentTime}`
           const alreadySent = await wasReminderSentToday(userId, 'water_reminder', currentTime)
           if (alreadySent) {
             console.log(`⏭ Skipped water_reminder for user ${userId} (already sent today)`)
