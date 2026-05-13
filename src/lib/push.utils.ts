@@ -103,7 +103,13 @@ export async function subscribeToPush(
 
   try {
     // Check for existing subscription
-    const existingSubscription = await registration.pushManager.getSubscription();
+    let existingSubscription: PushSubscription | null = null;
+    try {
+      existingSubscription = await registration.pushManager.getSubscription();
+    } catch (err) {
+      console.warn("⚠️ Failed to get existing subscription:", err);
+    }
+
     if (existingSubscription) {
       const isExpired =
         existingSubscription.expirationTime !== null &&
@@ -111,7 +117,11 @@ export async function subscribeToPush(
 
       if (isExpired) {
         console.log("⚠️ Subscription expired, unsubscribing and re-subscribing...");
-        await existingSubscription.unsubscribe();
+        try {
+          await existingSubscription.unsubscribe();
+        } catch (err) {
+          console.warn("⚠️ Failed to unsubscribe from expired subscription:", err);
+        }
       } else {
         console.log("📬 Already subscribed to push notifications.");
         // Re-save to Supabase in case it was lost
@@ -139,15 +149,24 @@ export async function subscribeToPush(
     } catch (err) {
       console.warn("⚠️ Failed to save subscription to Supabase:", err);
       // Also try via API as fallback
-      await fetch("/api/send-notification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "subscribe",
-          subscription: subscription.toJSON(),
-          user_id: userId,
-        }),
-      });
+      try {
+        const apiResponse = await fetch("/api/send-notification", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "subscribe",
+            subscription: subscription.toJSON(),
+            user_id: userId,
+          }),
+        });
+        if (!apiResponse.ok) {
+          console.warn("⚠️ API fallback also failed:", apiResponse.status, apiResponse.statusText);
+        } else {
+          console.log("✅ Subscription saved via API fallback.");
+        }
+      } catch (apiErr) {
+        console.error("❌ Both Supabase and API save methods failed:", apiErr);
+      }
     }
 
     return subscription;

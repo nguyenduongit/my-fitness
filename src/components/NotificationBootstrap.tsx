@@ -30,15 +30,32 @@ export default function NotificationBootstrap() {
     notificationBootstrapStarted = true;
 
     let registration: ServiceWorkerRegistration | null = null;
+    let subscriptionCheckInterval: NodeJS.Timeout | null = null;
 
     const initializeNotifications = async () => {
       registration = await registerServiceWorker();
 
-      if (Notification.permission === "default") {
-        await requestNotificationPermission();
+      // Only subscribe if permission is already granted
+      // Don't auto-request permission - let user click the button
+      if (Notification.permission === "granted") {
+        await subscribeCurrentUser(registration);
       }
 
-      await subscribeCurrentUser(registration);
+      // For iOS PWA: periodically check if subscription is still valid
+      // iOS Safari PWA frequently revokes subscriptions
+      if (subscriptionCheckInterval) clearInterval(subscriptionCheckInterval);
+      subscriptionCheckInterval = setInterval(async () => {
+        if (registration && Notification.permission === "granted") {
+          const existingSub = await registration.pushManager.getSubscription();
+          if (!existingSub) {
+            console.log("⚠️ [iOS PWA] Subscription lost, attempting to re-subscribe...");
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await subscribeCurrentUser(registration);
+            }
+          }
+        }
+      }, 60000); // Check every minute
     };
 
     initializeNotifications().catch((error) => {
@@ -69,7 +86,7 @@ export default function NotificationBootstrap() {
 
             if (user) {
               // Save directly to Supabase
-              await supabase.from("push_subscriptions").upsert(
+              const { error } = await supabase.from("push_subscriptions").upsert(
                 {
                   user_id: user.id,
                   endpoint: subData.endpoint,
@@ -79,7 +96,11 @@ export default function NotificationBootstrap() {
                 },
                 { onConflict: "user_id,endpoint" }
               );
-              console.log("✅ Updated push subscription after change.");
+              if (error) {
+                console.error("❌ Failed to update subscription:", error);
+              } else {
+                console.log("✅ Updated push subscription after change.");
+              }
             }
           }
         } catch (err) {
@@ -93,6 +114,7 @@ export default function NotificationBootstrap() {
     return () => {
       subscription.unsubscribe();
       navigator.serviceWorker?.removeEventListener("message", handleSWMessage);
+      if (subscriptionCheckInterval) clearInterval(subscriptionCheckInterval);
     };
   }, []);
 

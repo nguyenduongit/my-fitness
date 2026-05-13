@@ -74,8 +74,7 @@ SELECT cron.schedule(
     SELECT net.http_post(
         url := 'https://zuexxflzruzkfqfoylgl.supabase.co/functions/v1/send-push-notification',
         headers := jsonb_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+            'Content-Type', 'application/json'
         ),
         body := jsonb_build_object(
             'action', 'cron-check-reminders'
@@ -100,8 +99,7 @@ BEGIN
     PERFORM net.http_post(
         url := 'https://zuexxflzruzkfqfoylgl.supabase.co/functions/v1/send-push-notification',
         headers := jsonb_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+            'Content-Type', 'application/json'
         ),
         body := jsonb_build_object(
             'action', 'send-notification',
