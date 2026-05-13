@@ -11,8 +11,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'https://esm.sh/web-push@3.6.7'
 
 // ─── Cấu hình VAPID ─────────────────────────────────────────────────────────
-const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY') || ''
-const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY') || ''
+const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY') || 'BI192a_Mc9QovwVInYbe_R0FsYznDgkB3YZ-oj-Z-Q5jLYvBeQs1ulamNkR00gR9zlr1YDS62xSthoO8hcoqHhI'
+const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY') || 'YFeWgcEMSX0019zvvJfGajEyZGwDOqCBSw1oTgmVSDs'
 const vapidSubject = Deno.env.get('VAPID_SUBJECT') || 'mailto:nguyenduongit89@gmail.com'
 
 let isVapidConfigured = false;
