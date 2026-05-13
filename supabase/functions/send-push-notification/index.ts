@@ -146,17 +146,31 @@ async function sendPushToUser(
     )
   )
 
-  // Xoá subscriptions hết hạn (status 410)
-  const expiredEndpoints = results
-    .map((r, i) => {
-      if (r.status === 'rejected' && r.reason?.statusCode === 410) {
-        return subs[i].endpoint
+  // Lọc và in ra chi tiết lỗi từ Push Service
+const failedResults = results.filter((r) => r.status === 'rejected');
+if (failedResults.length > 0) {
+  failedResults.forEach((r, index) => {
+    // r.reason chứa thông tin chi tiết lỗi (ví dụ: statusCode: 410, 401, 400...)
+    console.error(`❌ Lỗi gửi push cho user ${userId} (thiết bị ${index}):`, (r as PromiseRejectedResult).reason);
+  });
+}
+
+  // Xoá subscriptions hết hạn hoặc không tồn tại (status 410 hoặc 404)
+  const expiredEndpoints: string[] = []
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      const statusCode = r.reason?.statusCode
+      const message = r.reason?.message || r.reason?.toString()
+      console.error(`❌ Push failed for user ${userId}, endpoint ${subs[i].endpoint}: [${statusCode}] ${message}`)
+      
+      if (statusCode === 410 || statusCode === 404) {
+        expiredEndpoints.push(subs[i].endpoint)
       }
-      return null
-    })
-    .filter(Boolean) as string[]
+    }
+  })
 
   if (expiredEndpoints.length > 0) {
+    console.log(`🧹 Cleaning up ${expiredEndpoints.length} expired/invalid subscriptions for user ${userId}`)
     await supabaseAdmin
       .from('push_subscriptions')
       .delete()
